@@ -187,15 +187,3 @@
 html {
   font-size: var(--font-size);
 }
-
-/* Custom dark theme colors for cottage schedule */
-:root {
-  --cottage-dark: #3a3f47;
-  --cottage-darker: #2d3238;
-  --cottage-border: #5a6070;
-  --cottage-cream: #e8dfc4;
-  --cottage-light: #b8bcc4;
-}
-
-/* Serif font for elegant headings */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&display=swap');

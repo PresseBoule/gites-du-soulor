@@ -1,215 +1,244 @@
-import { Hono } from "npm:hono";
-import { cors } from "npm:hono/cors";
-import { logger } from "npm:hono/logger";
-import * as reservations from "./reservations.tsx";
-import { sendReservationNotification, sendGuestConfirmationEmail } from "./email.tsx";
+import { Hono } from 'npm:hono';
+import { cors } from 'npm:hono/cors';
+import { logger } from 'npm:hono/logger';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+import * as kv from './kv_store.tsx';
 
 const app = new Hono();
 
-// Enable logger
-app.use("*", logger(console.log));
+app.use('*', cors());
+app.use('*', logger(console.log));
 
-// Enable CORS for all routes and methods
-app.use(
-  "/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-  })
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
 
-// Health check endpoint
-app.get("/make-server-09db1ac7/health", (c) => {
-  return c.json({ status: "ok" });
-});
+// Fonction pour envoyer un email de confirmation de réservation
+async function sendBookingEmail(bookingData: {
+  gite: string;
+  startDate: string;
+  endDate: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  price: number;
+  season: string;
+}) {
+  const resendApiKey = Deno.env.get('RESEND_API_KEY');
+  
+  if (!resendApiKey) {
+    console.error('RESEND_API_KEY not configured');
+    return { success: false, error: 'Email service not configured' };
+  }
 
-// Admin: Clear all reservations (use with caution!)
-app.delete("/make-server-09db1ac7/admin/clear-all", async (c) => {
-  try {
-    // Get all reservation keys
-    const allReservations = await reservations.getAllReservations().catch(() => []);
-    
-    // Delete each one
-    for (const reservation of allReservations) {
-      if (reservation?.id) {
-        await reservations.deleteReservation(reservation.id);
-      }
-    }
-    
-    return c.json({ 
-      success: true, 
-      message: `Cleared ${allReservations.length} reservations`,
-      count: allReservations.length 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
-  } catch (error) {
-    console.error("Error clearing reservations:", error);
-    return c.json({ success: false, error: error.message || "Failed to clear reservations" }, 500);
-  }
-});
+  };
 
-// Get all reservations
-app.get("/make-server-09db1ac7/reservations", async (c) => {
-  try {
-    const allReservations = await reservations.getAllReservations();
-    return c.json({ success: true, data: allReservations });
-  } catch (error) {
-    console.error("Error fetching reservations:", error);
-    return c.json({ success: false, error: "Failed to fetch reservations" }, 500);
-  }
-});
+  const nights = Math.ceil((new Date(bookingData.endDate).getTime() - new Date(bookingData.startDate).getTime()) / (1000 * 60 * 60 * 24));
 
-// Get a single reservation
-app.get("/make-server-09db1ac7/reservations/:id", async (c) => {
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #3d4f5c 0%, #4a5c6a 100%); color: #c9a77c; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ddd; }
+        .detail-label { font-weight: bold; color: #3d4f5c; }
+        .detail-value { color: #555; }
+        .total { background: #3d4f5c; color: #c9a77c; padding: 15px; margin-top: 20px; border-radius: 5px; text-align: center; font-size: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="margin: 0; font-size: 28px; letter-spacing: 2px;">NOUVELLE RÉSERVATION</h1>
+          <p style="margin: 10px 0 0 0; color: #e8e8e8;">Les Gîtes du Soulor</p>
+        </div>
+        <div class="content">
+          <h2 style="color: #3d4f5c; margin-top: 0;">Détails de la réservation</h2>
+          
+          <div style="margin: 20px 0;">
+            <div class="detail-row">
+              <span class="detail-label">Gîte :</span>
+              <span class="detail-value">${bookingData.gite}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Arrivée :</span>
+              <span class="detail-value">${formatDate(bookingData.startDate)}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Départ :</span>
+              <span class="detail-value">${formatDate(bookingData.endDate)}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Durée :</span>
+              <span class="detail-value">${nights} nuit${nights > 1 ? 's' : ''}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Saison :</span>
+              <span class="detail-value">${bookingData.season}</span>
+            </div>
+          </div>
+
+          <h2 style="color: #3d4f5c;">Informations client</h2>
+          <div style="margin: 20px 0;">
+            <div class="detail-row">
+              <span class="detail-label">Nom :</span>
+              <span class="detail-value">${bookingData.customerName}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Email :</span>
+              <span class="detail-value">${bookingData.customerEmail}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Téléphone :</span>
+              <span class="detail-value">${bookingData.customerPhone}</span>
+            </div>
+          </div>
+
+          <div class="total">
+            <strong>Total : ${bookingData.price}€</strong>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
   try {
-    const id = c.req.param("id");
-    const reservation = await reservations.getReservation(id);
-    
-    if (!reservation) {
-      return c.json({ success: false, error: "Reservation not found" }, 404);
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Les Gîtes du Soulor <onboarding@resend.dev>',
+        to: ['spanazol@wanadoo.fr'],
+        subject: `Nouvelle réservation - ${bookingData.gite} - ${bookingData.customerName}`,
+        html: emailHtml,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error sending email:', result);
+      return { success: false, error: result };
     }
-    
-    return c.json({ success: true, data: reservation });
+
+    console.log('Email sent successfully:', result);
+    return { success: true, result };
   } catch (error) {
-    console.error("Error fetching reservation:", error);
-    return c.json({ success: false, error: "Failed to fetch reservation" }, 500);
+    console.error('Error sending email:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// Récupérer toutes les réservations pour un gîte
+app.get('/make-server-497309b8/bookings/:gite', async (c) => {
+  try {
+    const gite = c.req.param('gite');
+    const prefix = `booking:${gite}:`;
+    
+    const bookings = await kv.getByPrefix(prefix);
+    
+    return c.json({ success: true, bookings });
+  } catch (error) {
+    console.log('Error fetching bookings:', error);
+    return c.json({ success: false, error: `Error fetching bookings: ${error}` }, 500);
   }
 });
 
-// Create a new reservation
-app.post("/make-server-09db1ac7/reservations", async (c) => {
+// Créer une nouvelle réservation
+app.post('/make-server-497309b8/bookings', async (c) => {
   try {
     const body = await c.req.json();
-    const { giteId, giteName, guestName, guestEmail, guestPhone, checkIn, checkOut, guests, notes } = body;
-
-    // Validate required fields
-    if (!guestName || !checkIn || !checkOut || !giteId || !giteName) {
-      return c.json(
-        { success: false, error: "Missing required fields: giteId, giteName, guestName, checkIn, checkOut" },
-        400
-      );
+    const { gite, startDate, endDate, customerName, customerEmail, customerPhone, price, season } = body;
+    
+    if (!gite || !startDate || !endDate || !customerName || !customerEmail) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400);
     }
-
-    // Check for date conflicts for this specific gite
-    const hasConflict = await reservations.checkDateConflict(checkIn, checkOut, giteId);
-    if (hasConflict) {
-      return c.json(
-        { success: false, error: "Ces dates sont déjà réservées pour ce gîte. Veuillez choisir d'autres dates." },
-        409
-      );
-    }
-
-    // Create the reservation
-    const reservation = await reservations.createReservation({
-      giteId,
-      giteName,
-      guestName,
-      guestEmail: guestEmail || "",
-      guestPhone: guestPhone || "",
-      checkIn,
-      checkOut,
-      guests: guests || 1,
-      notes: notes || "",
-    });
-
-    // Send email notification to manager (don't fail if email fails)
-    const managerEmailSent = await sendReservationNotification(reservation, false);
-    if (!managerEmailSent) {
-      console.warn("Failed to send manager notification for reservation:", reservation.id);
-    }
-
-    // Send confirmation email to guest (don't fail if email fails)
-    const guestEmailSent = await sendGuestConfirmationEmail(reservation);
-    if (!guestEmailSent) {
-      console.warn("Failed to send guest confirmation email for reservation:", reservation.id);
-    }
-
-    return c.json({ 
-      success: true, 
-      data: reservation, 
-      managerEmailSent,
-      guestEmailSent 
-    }, 201);
-  } catch (error) {
-    console.error("Error creating reservation:", error);
-    return c.json({ success: false, error: "Failed to create reservation" }, 500);
-  }
-});
-
-// Update a reservation
-app.put("/make-server-09db1ac7/reservations/:id", async (c) => {
-  try {
-    const id = c.req.param("id");
-    const body = await c.req.json();
-    const { guestName, guestEmail, guestPhone, checkIn, checkOut, guests, notes } = body;
-
-    // Check if reservation exists
-    const existing = await reservations.getReservation(id);
-    if (!existing) {
-      return c.json({ success: false, error: "Reservation not found" }, 404);
-    }
-
-    // If dates changed, check for conflicts
-    if (checkIn || checkOut) {
-      const newCheckIn = checkIn || existing.checkIn;
-      const newCheckOut = checkOut || existing.checkOut;
-      const hasConflict = await reservations.checkDateConflict(newCheckIn, newCheckOut, id);
+    
+    // Vérifier les conflits de dates
+    const prefix = `booking:${gite}:`;
+    const existingBookings = await kv.getByPrefix(prefix);
+    
+    const newStart = new Date(startDate);
+    const newEnd = new Date(endDate);
+    
+    for (const booking of existingBookings) {
+      const bookingStart = new Date(booking.startDate);
+      const bookingEnd = new Date(booking.endDate);
       
-      if (hasConflict) {
-        return c.json(
-          { success: false, error: "Ces dates sont déjà réservées. Veuillez choisir d'autres dates." },
-          409
-        );
+      // Vérifier si les dates se chevauchent
+      if (
+        (newStart >= bookingStart && newStart < bookingEnd) ||
+        (newEnd > bookingStart && newEnd <= bookingEnd) ||
+        (newStart <= bookingStart && newEnd >= bookingEnd)
+      ) {
+        return c.json({ 
+          success: false, 
+          error: 'Ces dates sont déjà réservées pour ce gîte' 
+        }, 409);
       }
     }
-
-    // Update the reservation
-    const updated = await reservations.updateReservation(id, {
-      guestName,
-      guestEmail,
-      guestPhone,
-      checkIn,
-      checkOut,
-      guests,
-      notes,
-    });
-
-    if (!updated) {
-      return c.json({ success: false, error: "Failed to update reservation" }, 500);
+    
+    // Créer la réservation
+    const bookingId = `booking:${gite}:${Date.now()}`;
+    const bookingData = {
+      id: bookingId,
+      gite,
+      startDate,
+      endDate,
+      customerName,
+      customerEmail,
+      customerPhone,
+      price,
+      season,
+      createdAt: new Date().toISOString(),
+    };
+    
+    await kv.set(bookingId, bookingData);
+    
+    // Envoyer l'email de confirmation au gérant
+    const emailResult = await sendBookingEmail(bookingData);
+    
+    if (!emailResult.success) {
+      console.error('Failed to send email, but booking was created:', emailResult.error);
+      // On continue même si l'email échoue, la réservation est créée
     }
-
-    // Send email notification (don't fail if email fails)
-    const emailSent = await sendReservationNotification(updated, true);
-    if (!emailSent) {
-      console.warn("Failed to send email notification for updated reservation:", updated.id);
-    }
-
-    return c.json({ success: true, data: updated, emailSent });
+    
+    return c.json({ success: true, booking: bookingData, emailSent: emailResult.success });
   } catch (error) {
-    console.error("Error updating reservation:", error);
-    return c.json({ success: false, error: "Failed to update reservation" }, 500);
+    console.log('Error creating booking:', error);
+    return c.json({ success: false, error: `Error creating booking: ${error}` }, 500);
   }
 });
 
-// Delete a reservation
-app.delete("/make-server-09db1ac7/reservations/:id", async (c) => {
+// Supprimer une réservation
+app.delete('/make-server-497309b8/bookings/:id', async (c) => {
   try {
-    const id = c.req.param("id");
-    const success = await reservations.deleteReservation(id);
+    const id = c.req.param('id');
     
-    if (!success) {
-      return c.json({ success: false, error: "Reservation not found" }, 404);
-    }
+    await kv.del(id);
     
-    return c.json({ success: true, message: "Reservation deleted successfully" });
+    return c.json({ success: true });
   } catch (error) {
-    console.error("Error deleting reservation:", error);
-    return c.json({ success: false, error: "Failed to delete reservation" }, 500);
+    console.log('Error deleting booking:', error);
+    return c.json({ success: false, error: `Error deleting booking: ${error}` }, 500);
   }
 });
-
-
 
 Deno.serve(app.fetch);

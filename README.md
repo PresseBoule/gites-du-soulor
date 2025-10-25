@@ -1,7 +1,7 @@
 
-  # Project Planning
+  # Calendrier de réservation gîte
 
-  This is a code bundle for Project Planning. The original project is available at https://www.figma.com/design/vG6i8HWRF4iV8Mj2hFVcWL/Project-Planning.
+  This is a code bundle for Calendrier de réservation gîte. The original project is available at https://www.figma.com/design/U8FAFTvImFsWFhwBPFd9jz/Calendrier-de-r%C3%A9servation-g%C3%AEte.
 
   ## Running the code
 
