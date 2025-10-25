@@ -575,6 +575,10 @@
     min-height: calc(var(--spacing) * 16);
   }
 
+  .min-h-\[400px\] {
+    min-height: 400px;
+  }
+
   .min-h-\[500px\] {
     min-height: 500px;
   }
@@ -954,8 +958,8 @@
     text-underline-offset: 4px;
   }
 
-  .opacity-20 {
-    opacity: .2;
+  .opacity-30 {
+    opacity: .3;
   }
 
   .opacity-40 {
@@ -1229,6 +1233,12 @@
   }
 
   @media (width >= 40rem) {
+    .sm\:min-h-\[500px\] {
+      min-height: 500px;
+    }
+  }
+
+  @media (width >= 40rem) {
     .sm\:grid-cols-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -1371,6 +1381,12 @@
   @media (width >= 64rem) {
     .lg\:mt-24 {
       margin-top: calc(var(--spacing) * 24);
+    }
+  }
+
+  @media (width >= 64rem) {
+    .lg\:min-h-\[600px\] {
+      min-height: 600px;
     }
   }
 

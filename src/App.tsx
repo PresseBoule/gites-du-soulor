@@ -270,17 +270,17 @@ export default function App() {
       <div className="min-h-screen" style={{ backgroundColor: "var(--cottage-dark)" }}>
         {/* Hero Section */}
         <div
-          className="relative border-b-2 overflow-hidden"
+          className="relative border-b-2 overflow-hidden min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]"
           style={{ borderColor: "var(--cottage-border)" }}
         >
-          <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0 opacity-30">
             <img
               src={heroImage}
               alt="Gîte"
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center">
+          <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center flex flex-col justify-center min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]">
             <h1
               className="mb-4 sm:mb-6 text-white tracking-wide text-3xl sm:text-4xl lg:text-5xl xl:text-6xl"
               style={{
