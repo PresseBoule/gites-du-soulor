@@ -1,0 +1,10 @@
+# Configuration Supabase pour Les Gîtes du Soulor
+# https://supabase.com/docs/guides/functions
+
+[project]
+ref = "mdmwkojncfnqlxdxrxqo"
+
+# La fonction Edge "server" est déployée sous le nom "make-server-09db1ac7"
+# Déployer avec : supabase functions deploy make-server-09db1ac7
+[functions.make-server-09db1ac7]
+verify_jwt = false

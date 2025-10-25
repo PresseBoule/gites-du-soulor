@@ -1,0 +1,6 @@
+# robots.txt pour Les Gîtes du Soulor
+User-agent: *
+Allow: /
+
+# Sitemap (à créer plus tard si besoin)
+# Sitemap: https://votresite.netlify.app/sitemap.xml
