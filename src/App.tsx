@@ -241,14 +241,15 @@ export default function App() {
       <div className="min-h-screen" style={{ backgroundColor: "var(--cottage-dark)" }}>
         {/* Hero Section */}
         <div
-          className="relative border-b-2 overflow-hidden"
+          className="relative border-b-2"
           style={{ borderColor: "var(--cottage-border)" }}
         >
-          <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0 opacity-20 overflow-hidden">
             <img
               src={heroImage}
               alt="Gîte"
               className="w-full h-full object-cover"
+              style={{ minHeight: "100%" }}
             />
           </div>
           <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center">
