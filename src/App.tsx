@@ -10,19 +10,18 @@ import heroImage from "figma:asset/b1015fd3878a43013db9e4b6aed12af42607e0c8.png"
 
 const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-09db1ac7`;
 
-// Types pour les gîtes
-export interface Gite {
-  id: string;
-  name: string;
-  description: string;
-  capacity: number;
-  color: string;
-}
+// Les 4 gîtes
+const GITES = [
+  { id: "le-soum", name: "Le Soum" },
+  { id: "lestaing", name: "L'Estaing" },
+  { id: "le-suyen", name: "Le Suyen" },
+  { id: "le-tech", name: "Le Tech" },
+];
 
 export interface Reservation {
   id: string;
-  giteId: string;
-  giteName: string;
+  giteId?: string;
+  giteName?: string;
   guestName: string;
   guestEmail: string;
   guestPhone: string;
@@ -35,8 +34,8 @@ export interface Reservation {
 
 interface ServerReservation {
   id: string;
-  giteId: string;
-  giteName: string;
+  giteId?: string;
+  giteName?: string;
   guestName: string;
   guestEmail: string;
   guestPhone: string;
@@ -47,38 +46,6 @@ interface ServerReservation {
   status: "pending" | "approved" | "refused";
   createdAt: string;
 }
-
-// Configuration des 4 gîtes
-const GITES: Gite[] = [
-  {
-    id: "le-soum",
-    name: "Le Soum",
-    description: "Vue panoramique sur les montagnes",
-    capacity: 2,
-    color: "rgba(232, 220, 196, 0.15)",
-  },
-  {
-    id: "lestaing",
-    name: "L'Estaing",
-    description: "Au cœur de la nature",
-    capacity: 2,
-    color: "rgba(139, 92, 246, 0.15)",
-  },
-  {
-    id: "le-suyen",
-    name: "Le Suyen",
-    description: "Calme et sérénité",
-    capacity: 2,
-    color: "rgba(59, 130, 246, 0.15)",
-  },
-  {
-    id: "le-tech",
-    name: "Le Tech",
-    description: "Authenticité montagnarde",
-    capacity: 2,
-    color: "rgba(16, 185, 129, 0.15)",
-  },
-];
 
 function convertToReservation(serverRes: ServerReservation): Reservation {
   return {
@@ -97,7 +64,7 @@ function convertToReservation(serverRes: ServerReservation): Reservation {
 }
 
 export default function App() {
-  const [selectedGite, setSelectedGite] = useState<Gite | null>(null);
+  const [selectedGite, setSelectedGite] = useState<string | null>(null);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selectedDates, setSelectedDates] = useState<{ checkIn: Date | null; checkOut: Date | null }>({
@@ -113,13 +80,10 @@ export default function App() {
     loadReservations();
   }, []);
 
-  // Filter reservations when gite is selected
+  // Filter by gite
   useEffect(() => {
     if (selectedGite) {
-      const filtered = allReservations.filter(r => r.giteId === selectedGite.id);
-      setReservations(filtered);
-      setSelectedDates({ checkIn: null, checkOut: null });
-      setShowBookingForm(false);
+      setReservations(allReservations.filter(r => r.giteId === selectedGite));
     }
   }, [selectedGite, allReservations]);
 
@@ -167,16 +131,17 @@ export default function App() {
     notes: string;
   }) => {
     if (!selectedDates.checkIn || !selectedDates.checkOut || !selectedGite) {
-      toast.error("Veuillez sélectionner un gîte et des dates");
+      toast.error("Veuillez sélectionner des dates");
       return;
     }
 
     try {
       setSubmitting(true);
 
+      const gite = GITES.find(g => g.id === selectedGite);
       const payload = {
-        giteId: selectedGite.id,
-        giteName: selectedGite.name,
+        giteId: selectedGite,
+        giteName: gite?.name || selectedGite,
         guestName: bookingData.guestName,
         guestEmail: bookingData.guestEmail,
         guestPhone: bookingData.guestPhone,
@@ -205,7 +170,7 @@ export default function App() {
       if (result.success && result.data) {
         const newReservation = convertToReservation(result.data);
         setAllReservations((prev) => [...prev, newReservation]);
-        toast.success(`Demande envoyée avec succès pour ${selectedGite.name} ! Le gérant vous recontactera au plus vite pour un devis personnalisé.`, {
+        toast.success("Demande envoyée avec succès ! Le gérant vous recontactera au plus vite pour un devis personnalisé.", {
           duration: 5000,
         });
         setShowBookingForm(false);
@@ -217,12 +182,6 @@ export default function App() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleBackToSelection = () => {
-    setSelectedGite(null);
-    setSelectedDates({ checkIn: null, checkOut: null });
-    setShowBookingForm(false);
   };
 
   return (
@@ -241,15 +200,14 @@ export default function App() {
       <div className="min-h-screen" style={{ backgroundColor: "var(--cottage-dark)" }}>
         {/* Hero Section */}
         <div
-          className="relative border-b-2"
+          className="relative border-b-2 overflow-hidden"
           style={{ borderColor: "var(--cottage-border)" }}
         >
-          <div className="absolute inset-0 opacity-20 overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
             <img
               src={heroImage}
               alt="Gîte"
               className="w-full h-full object-cover"
-              style={{ minHeight: "100%" }}
             />
           </div>
           <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center">
@@ -275,12 +233,12 @@ export default function App() {
                 <span className="text-sm sm:text-base">Hautes-Pyrénées</span>
               </div>
               <div className="flex items-center gap-2" style={{ color: "var(--cottage-cream)" }}>
-                <Home className="h-5 w-5" />
-                <span className="text-sm sm:text-base">4 gîtes disponibles</span>
+                <Users className="h-5 w-5" />
+                <span className="text-sm sm:text-base">2 personnes</span>
               </div>
               <div className="flex items-center gap-2" style={{ color: "var(--cottage-cream)" }}>
-                <Users className="h-5 w-5" />
-                <span className="text-sm sm:text-base">2 personnes par gîte</span>
+                <Check className="h-5 w-5" />
+                <span className="text-sm sm:text-base">Équipements complets</span>
               </div>
             </div>
           </div>
@@ -289,8 +247,9 @@ export default function App() {
         {/* Main Content */}
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
           <div className="max-w-7xl mx-auto">
-            {!selectedGite ? (
-              /* Sélection du gîte */
+            
+            {/* Sélection du gîte */}
+            {!selectedGite && (
               <>
                 <div className="text-center mb-8 sm:mb-12">
                   <h2
@@ -300,66 +259,50 @@ export default function App() {
                     Choisissez votre gîte
                   </h2>
                   <p className="text-sm sm:text-base" style={{ color: "var(--cottage-light)" }}>
-                    Sélectionnez le gîte qui vous convient pour voir les disponibilités
+                    Sélectionnez l'un de nos 4 gîtes pour voir les disponibilités
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {GITES.map((gite) => (
                     <button
                       key={gite.id}
-                      onClick={() => setSelectedGite(gite)}
-                      className="border-2 rounded-lg p-6 sm:p-8 text-left transition-all hover:scale-105 hover:shadow-xl"
+                      onClick={() => setSelectedGite(gite.id)}
+                      className="border-2 rounded-lg p-8 text-left hover:scale-105 transition-transform"
                       style={{
-                        backgroundColor: gite.color,
+                        backgroundColor: "var(--cottage-darker)",
                         borderColor: "var(--cottage-border)",
                       }}
                     >
-                      <div className="flex items-start gap-4">
-                        <div
-                          className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                          style={{
-                            backgroundColor: "var(--cottage-cream)",
-                            color: "var(--cottage-darker)",
-                          }}
+                      <div className="flex items-center gap-4">
+                        <Home className="h-8 w-8" style={{ color: "var(--cottage-cream)" }} />
+                        <h3
+                          className="text-white text-2xl"
+                          style={{ fontFamily: "'Playfair Display', serif" }}
                         >
-                          <Home className="h-6 w-6" />
-                        </div>
-                        <div className="flex-1">
-                          <h3
-                            className="text-white mb-2 text-xl sm:text-2xl"
-                            style={{ fontFamily: "'Playfair Display', serif" }}
-                          >
-                            {gite.name}
-                          </h3>
-                          <p className="mb-3 text-sm sm:text-base" style={{ color: "var(--cottage-light)" }}>
-                            {gite.description}
-                          </p>
-                          <div className="flex items-center gap-2 text-sm" style={{ color: "var(--cottage-cream)" }}>
-                            <Users className="h-4 w-4" />
-                            <span>Capacité : {gite.capacity} personnes</span>
-                          </div>
-                        </div>
-                        <div className="flex-shrink-0">
-                          <Check className="h-6 w-6" style={{ color: "var(--cottage-cream)" }} />
-                        </div>
+                          {gite.name}
+                        </h3>
                       </div>
                     </button>
                   ))}
                 </div>
               </>
-            ) : (
-              /* Calendrier et réservation */
+            )}
+
+            {/* Calendrier si gîte sélectionné */}
+            {selectedGite && (
               <>
-                {/* Bouton retour */}
                 <div className="mb-6">
                   <Button
-                    onClick={handleBackToSelection}
+                    onClick={() => {
+                      setSelectedGite(null);
+                      setSelectedDates({ checkIn: null, checkOut: null });
+                      setShowBookingForm(false);
+                    }}
                     variant="ghost"
-                    className="gap-2"
                     style={{ color: "var(--cottage-cream)" }}
                   >
-                    ← Changer de gîte
+                    ← Retour aux gîtes
                   </Button>
                 </div>
 
@@ -369,13 +312,10 @@ export default function App() {
                     className="text-white mb-4 text-2xl sm:text-3xl lg:text-4xl"
                     style={{ fontFamily: "'Playfair Display', serif" }}
                   >
-                    {selectedGite.name}
+                    {GITES.find(g => g.id === selectedGite)?.name}
                   </h2>
-                  <p className="text-sm sm:text-base mb-2" style={{ color: "var(--cottage-cream)" }}>
-                    {selectedGite.description}
-                  </p>
-                  <p className="text-sm" style={{ color: "var(--cottage-light)" }}>
-                    Consultez les disponibilités et réservez vos dates
+                  <p className="text-sm sm:text-base" style={{ color: "var(--cottage-light)" }}>
+                    Consultez nos disponibilités et réservez directement en ligne
                   </p>
                 </div>
 
