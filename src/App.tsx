@@ -4,13 +4,13 @@ import { Calendar, Users, MapPin, Check, Home } from "lucide-react";
 import { BookingCalendar } from "./components/BookingCalendar";
 import { BookingForm } from "./components/BookingForm";
 import { SeasonLegend } from "./components/SeasonLegend";
-import { toast, Toaster } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "./utils/supabase/info";
+import { toast, Toaster } from "sonner@2.0.3";
+import heroImage from "figma:asset/b1015fd3878a43013db9e4b6aed12af42607e0c8.png";
 
-// Image de héro - compatible Netlify
-const heroImage = "https://images.unsplash.com/photo-1701938840426-18396f3dd957?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb3VudGFpbiUyMGNvdHRhZ2UlMjBweXJlbmVlc3xlbnwxfHx8fDE3NjEzMTU4NzB8MA&ixlib=rb-4.1.0&q=80&w=1080";
+const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-09db1ac7`;
 
-// Types
+// Types pour les gîtes
 export interface Gite {
   id: string;
   name: string;
@@ -31,6 +31,21 @@ export interface Reservation {
   guests: number;
   notes: string;
   status: "pending" | "approved" | "refused";
+}
+
+interface ServerReservation {
+  id: string;
+  giteId: string;
+  giteName: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  notes: string;
+  status: "pending" | "approved" | "refused";
+  createdAt: string;
 }
 
 // Configuration des 4 gîtes
@@ -65,96 +80,20 @@ const GITES: Gite[] = [
   },
 ];
 
-// API URL
-const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-09db1ac7`;
-
-// API Functions
-async function fetchReservations(): Promise<Reservation[]> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      headers: {
-        Authorization: `Bearer ${publicAnonKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    
-    if (!result.success) {
-      throw new Error(result.error || "Failed to fetch reservations");
-    }
-
-    // Convert ISO strings back to Date objects
-    return result.data.map((r: any) => ({
-      ...r,
-      checkIn: new Date(r.checkIn),
-      checkOut: new Date(r.checkOut),
-    }));
-  } catch (error) {
-    console.error("Error fetching reservations:", error);
-    toast.error("Erreur lors du chargement des réservations");
-    return [];
-  }
-}
-
-async function createReservation(reservationData: {
-  giteId: string;
-  giteName: string;
-  guestName: string;
-  guestEmail: string;
-  guestPhone: string;
-  checkIn: Date;
-  checkOut: Date;
-  guests: number;
-  notes: string;
-}): Promise<{ success: boolean; data?: Reservation; error?: string }> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/reservations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${publicAnonKey}`,
-      },
-      body: JSON.stringify({
-        giteId: reservationData.giteId,
-        giteName: reservationData.giteName,
-        guestName: reservationData.guestName,
-        guestEmail: reservationData.guestEmail,
-        guestPhone: reservationData.guestPhone,
-        checkIn: reservationData.checkIn.toISOString(),
-        checkOut: reservationData.checkOut.toISOString(),
-        guests: reservationData.guests,
-        notes: reservationData.notes,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      return {
-        success: false,
-        error: result.error || "Erreur lors de la création de la réservation",
-      };
-    }
-
-    // Convert ISO strings back to Date objects
-    const reservation: Reservation = {
-      ...result.data,
-      checkIn: new Date(result.data.checkIn),
-      checkOut: new Date(result.data.checkOut),
-    };
-
-    return { success: true, data: reservation };
-  } catch (error) {
-    console.error("Error creating reservation:", error);
-    return {
-      success: false,
-      error: "Erreur de connexion au serveur",
-    };
-  }
+function convertToReservation(serverRes: ServerReservation): Reservation {
+  return {
+    id: serverRes.id,
+    giteId: serverRes.giteId,
+    giteName: serverRes.giteName,
+    guestName: serverRes.guestName,
+    guestEmail: serverRes.guestEmail,
+    guestPhone: serverRes.guestPhone,
+    checkIn: new Date(serverRes.checkIn),
+    checkOut: new Date(serverRes.checkOut),
+    guests: serverRes.guests,
+    notes: serverRes.notes,
+    status: serverRes.status || "pending",
+  };
 }
 
 export default function App() {
@@ -166,33 +105,51 @@ export default function App() {
     checkOut: null,
   });
   const [showBookingForm, setShowBookingForm] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Charger toutes les réservations au démarrage
+  // Load reservations from server
   useEffect(() => {
-    const loadReservations = async () => {
-      setLoading(true);
-      const loadedReservations = await fetchReservations();
-      setAllReservations(loadedReservations);
-      setLoading(false);
-    };
-
     loadReservations();
   }, []);
 
-  // Filtrer les réservations quand un gîte est sélectionné
+  // Filter reservations when gite is selected
   useEffect(() => {
     if (selectedGite) {
-      const giteReservations = allReservations.filter(r => r.giteId === selectedGite.id);
-      setReservations(giteReservations);
-      // Reset selection when changing gite
+      const filtered = allReservations.filter(r => r.giteId === selectedGite.id);
+      setReservations(filtered);
       setSelectedDates({ checkIn: null, checkOut: null });
       setShowBookingForm(false);
     }
   }, [selectedGite, allReservations]);
 
-  const handleGiteSelect = (gite: Gite) => {
-    setSelectedGite(gite);
+  const loadReservations = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/reservations`, {
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load reservations");
+      }
+
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        const validData = result.data.filter(
+          (item) => item && item.checkIn && item.checkOut && item.guestName
+        );
+        const converted = validData.map(convertToReservation);
+        setAllReservations(converted);
+      }
+    } catch (error) {
+      console.error("Error loading reservations:", error);
+      toast.error("Erreur lors du chargement des disponibilités");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDateSelect = (checkIn: Date | null, checkOut: Date | null) => {
@@ -209,43 +166,57 @@ export default function App() {
     guests: number;
     notes: string;
   }) => {
-    if (!selectedGite || !selectedDates.checkIn || !selectedDates.checkOut) {
+    if (!selectedDates.checkIn || !selectedDates.checkOut || !selectedGite) {
       toast.error("Veuillez sélectionner un gîte et des dates");
       return;
     }
 
-    setLoading(true);
+    try {
+      setSubmitting(true);
 
-    const result = await createReservation({
-      giteId: selectedGite.id,
-      giteName: selectedGite.name,
-      guestName: bookingData.guestName,
-      guestEmail: bookingData.guestEmail,
-      guestPhone: bookingData.guestPhone,
-      checkIn: selectedDates.checkIn,
-      checkOut: selectedDates.checkOut,
-      guests: bookingData.guests,
-      notes: bookingData.notes,
-    });
+      const payload = {
+        giteId: selectedGite.id,
+        giteName: selectedGite.name,
+        guestName: bookingData.guestName,
+        guestEmail: bookingData.guestEmail,
+        guestPhone: bookingData.guestPhone,
+        checkIn: selectedDates.checkIn.toISOString(),
+        checkOut: selectedDates.checkOut.toISOString(),
+        guests: bookingData.guests,
+        notes: bookingData.notes,
+      };
 
-    setLoading(false);
+      const response = await fetch(`${API_BASE_URL}/reservations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    if (!result.success) {
-      toast.error(result.error || "Erreur lors de la réservation");
-      return;
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(result.error || "Erreur lors de l'envoi de la demande");
+        return;
+      }
+
+      if (result.success && result.data) {
+        const newReservation = convertToReservation(result.data);
+        setAllReservations((prev) => [...prev, newReservation]);
+        toast.success(`Demande envoyée avec succès pour ${selectedGite.name} ! Le gérant vous recontactera au plus vite pour un devis personnalisé.`, {
+          duration: 5000,
+        });
+        setShowBookingForm(false);
+        setSelectedDates({ checkIn: null, checkOut: null });
+      }
+    } catch (error) {
+      console.error("Error creating reservation:", error);
+      toast.error("Erreur lors de la création de la réservation");
+    } finally {
+      setSubmitting(false);
     }
-
-    // Update local state
-    const newReservations = [...allReservations, result.data!];
-    setAllReservations(newReservations);
-
-    toast.success(
-      `Demande envoyée avec succès pour ${selectedGite.name} ! Le gérant vous recontactera au plus vite pour un devis personnalisé.`,
-      { duration: 5000 }
-    );
-
-    setShowBookingForm(false);
-    setSelectedDates({ checkIn: null, checkOut: null });
   };
 
   const handleBackToSelection = () => {
@@ -270,17 +241,17 @@ export default function App() {
       <div className="min-h-screen" style={{ backgroundColor: "var(--cottage-dark)" }}>
         {/* Hero Section */}
         <div
-          className="relative border-b-2 overflow-hidden min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]"
+          className="relative border-b-2 overflow-hidden"
           style={{ borderColor: "var(--cottage-border)" }}
         >
-          <div className="absolute inset-0 opacity-30">
+          <div className="absolute inset-0 opacity-20">
             <img
               src={heroImage}
               alt="Gîte"
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center flex flex-col justify-center min-h-[400px] sm:min-h-[500px] lg:min-h-[600px]">
+          <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 text-center">
             <h1
               className="mb-4 sm:mb-6 text-white tracking-wide text-3xl sm:text-4xl lg:text-5xl xl:text-6xl"
               style={{
@@ -336,7 +307,7 @@ export default function App() {
                   {GITES.map((gite) => (
                     <button
                       key={gite.id}
-                      onClick={() => handleGiteSelect(gite)}
+                      onClick={() => setSelectedGite(gite)}
                       className="border-2 rounded-lg p-6 sm:p-8 text-left transition-all hover:scale-105 hover:shadow-xl"
                       style={{
                         backgroundColor: gite.color,
@@ -379,7 +350,7 @@ export default function App() {
             ) : (
               /* Calendrier et réservation */
               <>
-                {/* Breadcrumb / Retour */}
+                {/* Bouton retour */}
                 <div className="mb-6">
                   <Button
                     onClick={handleBackToSelection}
@@ -391,7 +362,7 @@ export default function App() {
                   </Button>
                 </div>
 
-                {/* Titre avec gîte sélectionné */}
+                {/* Intro Section */}
                 <div className="text-center mb-8 sm:mb-12">
                   <h2
                     className="text-white mb-4 text-2xl sm:text-3xl lg:text-4xl"
@@ -435,7 +406,7 @@ export default function App() {
                           setShowBookingForm(false);
                           setSelectedDates({ checkIn: null, checkOut: null });
                         }}
-                        loading={loading}
+                        loading={submitting}
                       />
                     ) : (
                       <div
