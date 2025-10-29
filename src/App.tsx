@@ -30,7 +30,7 @@ export default function App() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="text-[#e8e8e8] tracking-wider uppercase text-sm">
-              Alpina Bardou
+              Arrens Marsous
             </div>
             <nav className="hidden md:flex items-center gap-8">
               <a href="#" className="text-[#e8e8e8] hover:text-[#c9a77c] transition-colors text-sm">
