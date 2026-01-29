@@ -1,7 +1,7 @@
 
-  # Personnaliser site Les Gites
+  # Calendrier de réservation gîte
 
-  This is a code bundle for Personnaliser site Les Gites. The original project is available at https://www.figma.com/design/IwkKRZiMn0WZujptgkfR8F/Personnaliser-site-Les-Gites.
+  This is a code bundle for Calendrier de réservation gîte. The original project is available at https://www.figma.com/design/U8FAFTvImFsWFhwBPFd9jz/Calendrier-de-r%C3%A9servation-g%C3%AEte.
 
   ## Running the code
 
