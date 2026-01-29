@@ -186,4 +186,13 @@
 
 html {
   font-size: var(--font-size);
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
+
+/* Custom smooth scroll with easing */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }

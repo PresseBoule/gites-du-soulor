@@ -1,0 +1,69 @@
+# Configuration Netlify pour Les Gîtes du Soulor
+
+# Configuration du build
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+# Exceptions pour les fichiers statiques (ne pas rediriger vers index.html)
+# IMPORTANT : Ces règles doivent être AVANT la redirection SPA
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/sitemap.xml"
+  status = 200
+
+[[redirects]]
+  from = "/robots.txt"
+  to = "/robots.txt"
+  status = 200
+
+[[redirects]]
+  from = "/manifest.json"
+  to = "/manifest.json"
+  status = 200
+
+[[redirects]]
+  from = "/favicon.svg"
+  to = "/favicon.svg"
+  status = 200
+
+[[redirects]]
+  from = "/logo-*.png"
+  to = "/logo-:splat.png"
+  status = 200
+
+[[redirects]]
+  from = "/logo-*.svg"
+  to = "/logo-:splat.svg"
+  status = 200
+  
+# Redirection pour SPA (Single Page Application)
+# Cette règle doit être EN DERNIER
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers pour le SEO et la sécurité
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(self), microphone=(), camera=()"
+
+# Headers spécifiques pour le sitemap
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Content-Type = "application/xml"
+    Cache-Control = "public, max-age=3600"
+
+# Headers pour robots.txt
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Content-Type = "text/plain"
+    Cache-Control = "public, max-age=3600"
