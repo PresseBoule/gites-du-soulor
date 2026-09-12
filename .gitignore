@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Secrets locaux : les liens iCal Airbnb et les clés API ne doivent jamais
+# être versionnés. Les valeurs de production vivent dans Supabase Secrets.
+.env
+.env.*
+!.env.example
+
+.supabase/
+supabase/.temp/
