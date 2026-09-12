@@ -12,15 +12,10 @@ import {
 import { toast } from 'sonner';
 
 interface Booking {
-  id: string;
   gite: string;
   startDate: string;
   endDate: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  price: number;
-  season: string;
+  status: 'pending' | 'accepted';
 }
 
 interface GiteBookingCalendarProps {
@@ -65,6 +60,8 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
       
       if (data.success) {
         setBookings(data.bookings || []);
+      } else {
+        toast.error(data.error || 'Impossible de vérifier toutes les disponibilités');
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -176,8 +173,6 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
       return;
     }
 
-    const { total, season } = calculatePrice(selectedStart, selectedEnd);
-
     // Formater les dates en YYYY-MM-DD sans conversion UTC pour éviter les décalages
     const formatDateForServer = (date: Date) => {
       const year = date.getFullYear();
@@ -200,8 +195,6 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
             gite,
             startDate: formatDateForServer(selectedStart),
             endDate: formatDateForServer(selectedEnd),
-            price: total,
-            season,
             ...customerData,
           }),
         }
@@ -210,7 +203,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
       const data = await response.json();
 
       if (data.success) {
-        toast.success('Réservation confirmée !');
+        toast.success('Votre demande a bien été envoyée !');
         setIsModalOpen(false);
         setSelectedStart(null);
         setSelectedEnd(null);
@@ -463,7 +456,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-[#c9a77c] to-[#b89768] text-white hover:from-[#d4b896] hover:to-[#c9a77c] py-4 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl uppercase tracking-[0.2em] text-sm font-light hover:scale-[1.02]"
               >
-                {isLoading ? 'Réservation en cours...' : 'Confirmer la réservation'}
+                {isLoading ? 'Envoi en cours...' : 'Envoyer la demande'}
               </button>
             )}
 

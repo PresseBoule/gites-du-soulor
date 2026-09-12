@@ -65,7 +65,7 @@ export function BookingModal({
         
         <div className="relative">
           <div className="sticky top-0 bg-gradient-to-r from-[#3d4f5c] to-[#2d3e4d] border-b border-[#c9a77c]/30 p-8 flex justify-between items-center rounded-t-xl">
-            <h2 className="text-[#c9a77c] tracking-[0.2em] uppercase text-lg font-light">Confirmer la réservation</h2>
+            <h2 className="text-[#c9a77c] tracking-[0.2em] uppercase text-lg font-light">Envoyer une demande</h2>
             <button
               onClick={onClose}
               className="text-[#c9a77c] hover:text-[#d4b896] transition-all hover:scale-110 duration-300"
@@ -193,7 +193,7 @@ export function BookingModal({
                   type="submit"
                   className="flex-1 bg-gradient-to-r from-[#c9a77c] to-[#b89768] text-white hover:from-[#d4b896] hover:to-[#c9a77c] py-3 rounded-lg shadow-xl hover:shadow-2xl transition-all duration-300 uppercase tracking-[0.15em] text-sm font-light hover:scale-[1.02]"
                 >
-                  Confirmer
+                  Envoyer la demande
                 </Button>
               </div>
             </form>
