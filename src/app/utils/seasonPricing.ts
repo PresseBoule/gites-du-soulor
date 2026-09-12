@@ -117,6 +117,17 @@ export function validateBooking(startDate: Date, endDate: Date): {
   if (nights < 1) {
     return { valid: false, error: 'La réservation doit être d\'au moins 1 nuit' };
   }
+
+  const dateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const hasConfiguredPrice = SEASON_PERIODS.some((period) => {
+    const start = new Date(period.start.getFullYear(), period.start.getMonth(), period.start.getDate());
+    const end = new Date(period.end.getFullYear(), period.end.getMonth(), period.end.getDate());
+    return dateOnly >= start && dateOnly < end;
+  });
+
+  if (!hasConfiguredPrice) {
+    return { valid: false, error: 'Les tarifs ne sont pas encore configurés pour ces dates' };
+  }
   
   return { valid: true };
 }
