@@ -28,4 +28,8 @@
 
   Le flux à importer dans Airbnb suit la forme `/make-server-497309b8/calendar/{gite}/{ICAL_FEED_TOKEN}.ics`. Il ne contient aucune donnée personnelle.
 
-  L'endpoint protégé `POST /make-server-497309b8/admin/agent/draft` prépare une réponse e-mail ou SMS. Il ne l'envoie jamais automatiquement. L'agent dispose d'un seul outil : la vérification déterministe des disponibilités et du tarif.
+  L'écran `#gestion-agent` permet de coller un e-mail ou un SMS, générer un brouillon, le modifier, l'approuver ou le refuser et consulter son historique. Le jeton administrateur reste dans la session du navigateur. Une approbation ne déclenche aucun envoi.
+
+  Les endpoints protégés `/admin/agent/drafts` conservent les brouillons et leur journal de validation. `/admin/agent/integrations` indique uniquement si les futurs connecteurs Orange et SMS sont configurés, sans exposer leurs secrets.
+
+  L'endpoint protégé `POST /make-server-497309b8/admin/agent/draft` prépare une réponse e-mail ou SMS et l'enregistre. L'agent dispose d'un seul outil : la vérification déterministe des disponibilités et du tarif.
