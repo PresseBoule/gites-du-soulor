@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Mountain, Home } from 'lucide-react';
+import { Mountain, Home, Settings } from 'lucide-react';
 import { GiteBookingCalendar } from './components/GiteBookingCalendar';
+import { AgentAdminDashboard } from './components/AgentAdminDashboard';
 import { Toaster } from 'sonner';
 import { projectId, publicAnonKey } from './utils/supabase/info';
 
@@ -13,6 +14,19 @@ const gites = [
 
 export default function App() {
   const [selectedGite, setSelectedGite] = useState(gites[0].id);
+  const [adminMode, setAdminMode] = useState(() => window.location.hash === '#gestion-agent');
+
+  const openAdmin = () => {
+    window.location.hash = 'gestion-agent';
+    setAdminMode(true);
+  };
+
+  const closeAdmin = () => {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    setAdminMode(false);
+  };
+
+  if (adminMode) return <AgentAdminDashboard onBack={closeAdmin} />;
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#3d4f5c] via-[#4a5c6a] to-[#3d4f5c]">
@@ -71,6 +85,9 @@ export default function App() {
         <p className="text-sm font-light tracking-wide">
           © 2026 Les Gîtes du Soulor - Tous droits réservés
         </p>
+        <button onClick={openAdmin} className="mx-auto mt-4 flex items-center gap-2 text-xs text-[#c9a77c]/45 transition-colors hover:text-[#c9a77c]">
+          <Settings size={13} /> Gestion
+        </button>
       </div>
     </div>
   );
