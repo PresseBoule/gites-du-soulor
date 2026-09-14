@@ -9,6 +9,26 @@ app.use('*', cors());
 app.use('*', logger(console.log));
 
 type BookingStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
+type AgentChannel = 'email' | 'sms';
+type DraftStatus = 'draft' | 'approved' | 'rejected';
+
+type DraftEvent = {
+  action: 'created' | 'edited' | 'approved' | 'rejected' | 'returned_to_draft';
+  at: string;
+};
+
+type AgentDraftRecord = {
+  id: string;
+  channel: AgentChannel;
+  customerMessage: string;
+  draft: string;
+  recipient: string;
+  subject: string;
+  status: DraftStatus;
+  createdAt: string;
+  updatedAt: string;
+  history: DraftEvent[];
+};
 
 const GITES: Record<string, string> = {
   'Le Soum': 'soum',
@@ -113,6 +133,14 @@ function hasAdminAccess(c: any) {
   const configuredToken = Deno.env.get('ADMIN_API_TOKEN');
   const suppliedToken = c.req.header('x-admin-token');
   return Boolean(configuredToken && suppliedToken && suppliedToken === configuredToken);
+}
+
+function normalizeShortText(value: unknown, maxLength: number) {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function draftStorageKey(id: string) {
+  return `agent-draft:${id}`;
 }
 
 type PublicBooking = {
@@ -679,12 +707,12 @@ app.get('/make-server-497309b8/admin/bookings', async (c) => {
   return c.json({ success: true, bookings: groups.flat() });
 });
 
-// Produit un brouillon : aucun message n'est envoyé automatiquement à ce stade.
+// Produit et journalise un brouillon : aucun message n'est envoyé automatiquement à ce stade.
 app.post('/make-server-497309b8/admin/agent/draft', async (c) => {
   if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
 
   try {
-    const { message, channel = 'email' } = await c.req.json();
+    const { message, channel = 'email', recipient = '', subject = '' } = await c.req.json();
     const normalizedMessage = String(message || '').trim();
     if (!normalizedMessage || normalizedMessage.length > 6_000) {
       return c.json({ success: false, error: 'Message invalide' }, 400);
@@ -696,11 +724,98 @@ app.post('/make-server-497309b8/admin/agent/draft', async (c) => {
     const draft = await draftAgentReply(
       channel === 'sms' ? `Canal : SMS. Réponse très courte.\n\n${normalizedMessage}` : `Canal : e-mail.\n\n${normalizedMessage}`,
     );
-    return c.json({ success: true, draft });
+    const now = new Date().toISOString();
+    const id = `${Date.now()}-${crypto.randomUUID()}`;
+    const record: AgentDraftRecord = {
+      id,
+      channel,
+      customerMessage: normalizedMessage,
+      draft,
+      recipient: normalizeShortText(recipient, 254),
+      subject: normalizeShortText(subject, 200),
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+      history: [{ action: 'created', at: now }],
+    };
+    await kv.set(draftStorageKey(id), record);
+    return c.json({ success: true, draft: record });
   } catch (error) {
     console.error('Agent draft failed:', error);
     return c.json({ success: false, error: 'Impossible de préparer une réponse' }, 500);
   }
+});
+
+// Historique des brouillons, réservé au tableau de gestion.
+app.get('/make-server-497309b8/admin/agent/drafts', async (c) => {
+  if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
+
+  const drafts = (await kv.getByPrefix('agent-draft:')) as AgentDraftRecord[];
+  drafts.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return c.json({ success: true, drafts });
+});
+
+// Modifie le texte ou change l'état du brouillon. « Approuvé » ne signifie pas « envoyé ».
+app.patch('/make-server-497309b8/admin/agent/drafts/:id', async (c) => {
+  if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
+
+  const id = c.req.param('id');
+  const key = draftStorageKey(id);
+  const existing = (await kv.get(key)) as AgentDraftRecord | null;
+  if (!existing) return c.json({ success: false, error: 'Brouillon introuvable' }, 404);
+
+  const body = await c.req.json();
+  const nextStatus = body.status as DraftStatus | undefined;
+  if (nextStatus && !['draft', 'approved', 'rejected'].includes(nextStatus)) {
+    return c.json({ success: false, error: 'Statut invalide' }, 400);
+  }
+
+  const nextDraft = body.draft === undefined ? existing.draft : String(body.draft).trim();
+  if (!nextDraft || nextDraft.length > 6_000) {
+    return c.json({ success: false, error: 'Texte du brouillon invalide' }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const history = [...(existing.history || [])];
+  if (nextDraft !== existing.draft) history.push({ action: 'edited', at: now });
+  if (nextStatus && nextStatus !== existing.status) {
+    history.push({
+      action: nextStatus === 'approved' ? 'approved' : nextStatus === 'rejected' ? 'rejected' : 'returned_to_draft',
+      at: now,
+    });
+  }
+
+  const updated: AgentDraftRecord = {
+    ...existing,
+    draft: nextDraft,
+    recipient: body.recipient === undefined ? existing.recipient : normalizeShortText(body.recipient, 254),
+    subject: body.subject === undefined ? existing.subject : normalizeShortText(body.subject, 200),
+    status: nextStatus || existing.status,
+    updatedAt: now,
+    history,
+  };
+  await kv.set(key, updated);
+  return c.json({ success: true, draft: updated });
+});
+
+// État des futurs connecteurs. Les secrets restent exclusivement dans Supabase.
+app.get('/make-server-497309b8/admin/agent/integrations', (c) => {
+  if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
+
+  return c.json({
+    success: true,
+    integrations: {
+      orange: {
+        incoming: Boolean(Deno.env.get('ORANGE_IMAP_PASSWORD')),
+        outgoing: Boolean(Deno.env.get('ORANGE_SMTP_PASSWORD')),
+        mode: 'draft_only',
+      },
+      sms: {
+        outgoing: Boolean(Deno.env.get('SMS_API_KEY')),
+        mode: 'draft_only',
+      },
+    },
+  });
 });
 
 // Flux sans données personnelles à importer dans Airbnb pour bloquer les demandes du site.
