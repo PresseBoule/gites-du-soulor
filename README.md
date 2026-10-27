@@ -33,3 +33,10 @@
   Les endpoints protégés `/admin/agent/drafts` conservent les brouillons et leur journal de validation. `/admin/agent/integrations` indique uniquement si les futurs connecteurs Orange et SMS sont configurés, sans exposer leurs secrets.
 
   L'endpoint protégé `POST /make-server-497309b8/admin/agent/draft` prépare une réponse e-mail ou SMS et l'enregistre. L'agent dispose d'un seul outil : la vérification déterministe des disponibilités et du tarif.
+
+  ## Assistant web et tarifs 2026–2027
+
+  Voir [architecture, tests et validation avant déploiement](docs/assistant-availability-2027.md).
+  Les tarifs sont calculés nuit par nuit, avec un calcul partagé entre l’interface et le serveur.
+  Une panne ou une source ICS absente donne une disponibilité inconnue, jamais un calendrier vide.
+  `npm test` exécute les tests locaux sans accès aux réservations réelles ni appel au modèle payant.
