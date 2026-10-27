@@ -55,3 +55,15 @@ Les dépendances ont été installées avec les scripts d’installation désact
 7. Vérifier que le tarif affiché par le calendrier et le serveur est identique sur des séjours mixtes, puis obtenir l’accord final avant fusion ou déploiement de production. GitHub et Netlify peuvent être reliés par un déploiement automatique : conserver la proposition en brouillon jusque-là.
 
 Après accord : déployer la fonction Supabase au même nom et compiler/publier l’UI du calendrier, puisque la règle de tarif nuit par nuit touche les deux. Le widget du site vitrine conserve son API actuelle. Prévoir le retour au commit de base et à la version précédente de la fonction en cas de problème.
+
+## Audit du déploiement actif et diagnostic séparé — 27 octobre 2026
+
+Le code réellement déployé a été exporté en lecture seule depuis Supabase et conservé localement dans `soulor-deployed-audit/` (hors dépôt). Son `index.tsx` a pour SHA256 `EBD5F1C2C515D49D61BF1A272B6F19743760F19910F2C249C367E1D7C388BD63`.
+
+Constat confirmé : la fonction active ne contient aucune période 2027 et son outil s’arrête avant de lire les calendriers quand le tarif n’est pas configuré. Cela explique la réponse actuelle pour janvier 2027. Les quatre noms AIRBNB_ICAL_* et OPENAI_API_KEY sont présents dans Supabase Secrets ; aucune valeur secrète n’a été révélée ou modifiée.
+
+Un diagnostic distinct, `soulor-availability-preview`, est préparé localement. Il réutilise les fonctions de disponibilité testées et les secrets ICS existants, mais n’expose que GET /health et POST /quote, avec l’authentification publique/serveur existante. Il ne comporte aucun appel au modèle, envoi d’e-mail, écriture ou suppression de réservation. La fonction active et le widget restent inchangés. L’installation de ce diagnostic dans le projet actif nécessite l’accord du propriétaire ; aucune installation effectuée à ce stade.
+
+Le test supplémentaire vérifie que ses fonctions sont exactement celles du code revu, sans route d’écriture ou de modèle : 20 tests réussis au total. Le point d’entrée diagnostic passe aussi `deno check`. Le générateur est `scripts/generate-availability-preview.mjs` ; sa sortie est versionnée pour revue.
+
+Après accord et installation du diagnostic, comparer les quatre gîtes sur des dates occupées/libres avec la source existante, vérifier les tarifs mixtes et les périodes non tarifées. Ce diagnostic valide les sources réelles et les calculs ; il ne constitue pas encore un test du nouveau dialogue avec le modèle réel. Ne pas le présenter comme une validation complète de l’assistant ni fusionner la PR sur cette seule base.
