@@ -67,3 +67,19 @@ Un diagnostic distinct, `soulor-availability-preview`, est préparé localement.
 Le test supplémentaire vérifie que ses fonctions sont exactement celles du code revu, sans route d’écriture ou de modèle : 20 tests réussis au total. Le point d’entrée diagnostic passe aussi `deno check`. Le générateur est `scripts/generate-availability-preview.mjs` ; sa sortie est versionnée pour revue.
 
 Après accord et installation du diagnostic, comparer les quatre gîtes sur des dates occupées/libres avec la source existante, vérifier les tarifs mixtes et les périodes non tarifées. Ce diagnostic valide les sources réelles et les calculs ; il ne constitue pas encore un test du nouveau dialogue avec le modèle réel. Ne pas le présenter comme une validation complète de l’assistant ni fusionner la PR sur cette seule base.
+
+## Diagnostic installé et vérification réelle — 27 octobre 2026 à 10 h 12 (Paris)
+
+Après accord explicite du propriétaire, la nouvelle fonction `soulor-availability-preview` a été installée dans le projet existant, sous son propre nom. La vérification JWT héritée est restée activée. La fonction active `make-server-497309b8`, le widget, les réservations et les secrets n’ont pas été modifiés.
+
+Le code installé est un assemblage des modules relus (tarifs partagés, lecture Supabase et diagnostic) en un fichier pour l’éditeur du tableau de bord. Le texte collé a été comparé intégralement au fichier local avant déploiement. Aucune route d’écriture ni aucun appel au modèle dans cet assemblage.
+
+Résultat des contrôles en ligne : santé HTTP 200 en mode read_only_preview ; 20 comparaisons de disponibilités sur les quatre gîtes, toutes concordantes avec les calendriers agrégés existants, aucune source indisponible et aucun écart. Les quatre sources ICS réelles sont donc lisibles par le nouveau parseur. Les scénarios comprennent des plages réellement occupées, janvier 2027, deux passages de saison et un séjour dépassant les périodes tarifées. Trois plages invalides ont en plus été refusées avec HTTP 400 et available:null.
+
+Exemples au moment de la vérification (ce ne sont pas des disponibilités garanties pour une consultation ultérieure) :
+- Du 24 au 28 janvier 2027 : les quatre gîtes libres dans les deux sources, 500 € chacun pour quatre nuits.
+- Du 5 au 7 février 2027 : 275 €, répartis en une nuit basse saison et une nuit haute saison.
+- Du 2 au 6 mai 2027 : 530 €, répartis sur les nuits des saisons concernées.
+- Du 31 août au 2 septembre 2027 : disponibilité vérifiable, tarif non configuré (aucun montant inventé).
+
+Les résultats détaillés et l’assemblage réellement installé sont conservés localement dans `soulor-deployed-audit/`, hors dépôt. Le nouveau dialogue avec le modèle réel n’a toujours pas été exécuté. Sa validation, puis l’accord de remplacement de la fonction active, restent nécessaires avant mise à jour de l’assistant public.
