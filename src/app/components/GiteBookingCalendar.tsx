@@ -427,7 +427,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
                     <>
                       <div className="flex justify-between items-center text-sm bg-[#2d3e4d]/30 p-4 rounded-lg">
                         <span className="text-[#c9a77c]/80 font-light">Saison</span>
-                        <span className="capitalize font-light">{getSeasonLabel(priceInfo.season as Season)}</span>
+                        <span className="capitalize font-light">{getSeasonLabel(priceInfo.season)}</span>
                       </div>
                       <div className="border-t border-[#c9a77c]/20 pt-5 mt-5">
                         <div className="flex items-center gap-2 text-[#c9a77c] mb-4">
