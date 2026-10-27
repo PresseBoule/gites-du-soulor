@@ -4,6 +4,7 @@ export interface SeasonPeriod {
   start: Date;
   end: Date;
   season: Season;
+  endExclusive?: boolean;
 }
 
 export interface Pricing {
@@ -53,6 +54,17 @@ export const SEASON_PERIODS: SeasonPeriod[] = [
   { start: new Date('2025-12-19'), end: new Date('2026-01-04'), season: 'haute' },
   { start: new Date('2026-02-08'), end: new Date('2026-03-08'), season: 'haute' },
   { start: new Date('2026-06-26'), end: new Date('2026-08-30'), season: 'haute' },
+
+  // Périodes 2026-2027 : début inclus, fin exclue.
+  { start: new Date('2026-12-18'), end: new Date('2027-01-04'), season: 'haute', endExclusive: true },
+  { start: new Date('2027-01-04'), end: new Date('2027-02-06'), season: 'basse', endExclusive: true },
+  { start: new Date('2027-02-06'), end: new Date('2027-03-08'), season: 'haute', endExclusive: true },
+  { start: new Date('2027-03-08'), end: new Date('2027-04-02'), season: 'basse', endExclusive: true },
+  { start: new Date('2027-04-02'), end: new Date('2027-05-03'), season: 'moyenne', endExclusive: true },
+  { start: new Date('2027-05-03'), end: new Date('2027-05-05'), season: 'basse', endExclusive: true },
+  { start: new Date('2027-05-05'), end: new Date('2027-05-10'), season: 'moyenne', endExclusive: true },
+  { start: new Date('2027-05-10'), end: new Date('2027-07-02'), season: 'basse', endExclusive: true },
+  { start: new Date('2027-07-02'), end: new Date('2027-09-01'), season: 'haute', endExclusive: true },
 ];
 
 export function getSeason(date: Date): Season {
@@ -62,7 +74,7 @@ export function getSeason(date: Date): Season {
     const start = new Date(period.start.getFullYear(), period.start.getMonth(), period.start.getDate());
     const end = new Date(period.end.getFullYear(), period.end.getMonth(), period.end.getDate());
     
-    if (dateOnly >= start && dateOnly <= end) {
+    if (dateOnly >= start && (period.endExclusive ? dateOnly < end : dateOnly <= end)) {
       return period.season;
     }
   }
