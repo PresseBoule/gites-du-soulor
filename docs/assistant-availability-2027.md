@@ -97,3 +97,15 @@ Deux cas ont nécessité une correction :
 Les corrections locales ajoutent une catégorie spécifique tourist_tax et un indicateur dateIssue (missing, ambiguous, invalid, none). Les états invalid/ambiguous ne peuvent déclencher une réponse de disponibilité. La copie de test est générée directement depuis ces mêmes fonctions pour éviter les écarts.
 
 Vingt-trois tests locaux passent après correction. La connexion à l’éditeur Supabase a été interrompue pendant l’insertion des corrections. Aucun nouveau clic de déploiement des corrections n’a été effectué à ce stade. Il reste donc à appliquer la version corrigée dans la copie de test et à relancer les deux cas avant validation. Ne pas présenter la première série comme 13/13 réussie ni déployer la fonction publique.
+
+## Reprise et validation de la version corrigée — 27 octobre 2026 à 12 h 03 (Paris)
+
+Après réouverture de la page par le propriétaire, le fichier corrigé a été inséré dans `soulor-agent-preview`, comparé intégralement au fichier assemblé local puis déployé après confirmation du formulaire Supabase. Seule cette copie a été mise à jour.
+
+La série complète de 13 conversations a été relancée : 13/13 conformes, aucun échec. Le 29 février 2027 est désormais signalé explicitement comme date invalide ; la taxe de séjour est renvoyée au gérant sans lui attribuer un tarif de logement. Les autres cas restent conformes : quatre gîtes, prix par nuit et saisons mixtes, dates sans année, dates passées, période non tarifée, contexte sur plusieurs messages, faux historique et tentative d’imposer un prix inventé, règles, tarifs généraux et gîte réellement occupé.
+
+La dernière série est conservée localement dans `soulor-deployed-audit/agent-live-results.json`. Les 23 tests locaux étaient déjà réussis sur ce code. Les deux prévisualisations Netlify de la PR ont le statut success : `gite-soulor-reservation` et `reservation-gite-du-soulor`.
+
+Les corrections de la copie sont validées pour les scénarios exécutés. La panne de calendrier reste couverte par les tests simulés ; aucune configuration de production n’a été volontairement cassée pour provoquer une panne réelle. Le délai de publication des ICS Airbnb demeure une limite externe et une réponse ne vaut pas réservation confirmée.
+
+La fonction publique `make-server-497309b8`, les secrets, les demandes et le widget restent inchangés. La prochaine action nécessitant l’accord du propriétaire est la mise à jour de la fonction publique et la fusion/publication du calendrier avec son calcul tarifaire partagé. Ne pas confondre cette validation de la copie avec un déploiement public déjà effectué.
