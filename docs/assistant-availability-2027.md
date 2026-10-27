@@ -83,3 +83,17 @@ Exemples au moment de la vérification (ce ne sont pas des disponibilités garan
 - Du 31 août au 2 septembre 2027 : disponibilité vérifiable, tarif non configuré (aucun montant inventé).
 
 Les résultats détaillés et l’assemblage réellement installé sont conservés localement dans `soulor-deployed-audit/`, hors dépôt. Le nouveau dialogue avec le modèle réel n’a toujours pas été exécuté. Sa validation, puis l’accord de remplacement de la fonction active, restent nécessaires avant mise à jour de l’assistant public.
+
+## Test conversationnel réel — 27 octobre 2026
+
+Après accord explicite du propriétaire, une seconde copie isolée, `soulor-agent-preview`, a été installée. Elle appelle le modèle avec la clé déjà configurée et ne comporte aucune route d’écriture de réservation ni envoi d’e-mail. La vérification JWT a été conservée. La fonction publique reste inchangée.
+
+Première série : 13 conversations réelles exécutées. Onze sont conformes : quatre gîtes, tarifs mixtes de février et mai, période partiellement non tarifée, année manquante, période passée, contexte sur plusieurs messages, tentative d’imposer un prix inventé, règles d’accueil, tarifs généraux et période occupée.
+
+Deux cas ont nécessité une correction :
+- Pour le 29 février 2027, le modèle renvoie une date absente et le serveur demande une précision au lieu de signaler explicitement la date impossible. Il n’annonce pas de disponibilité.
+- Une question sur la taxe de séjour est classée à tort comme une question sur les tarifs du logement. Aucun montant de taxe n’est connu ; la réponse doit demander confirmation au gérant.
+
+Les corrections locales ajoutent une catégorie spécifique tourist_tax et un indicateur dateIssue (missing, ambiguous, invalid, none). Les états invalid/ambiguous ne peuvent déclencher une réponse de disponibilité. La copie de test est générée directement depuis ces mêmes fonctions pour éviter les écarts.
+
+Vingt-trois tests locaux passent après correction. La connexion à l’éditeur Supabase a été interrompue pendant l’insertion des corrections. Aucun nouveau clic de déploiement des corrections n’a été effectué à ce stade. Il reste donc à appliquer la version corrigée dans la copie de test et à relancer les deux cas avant validation. Ne pas présenter la première série comme 13/13 réussie ni déployer la fonction publique.

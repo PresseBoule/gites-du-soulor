@@ -256,8 +256,9 @@ const REQUEST_TOOL = {
       intent: { type: 'string', enum: ['availability', 'price', 'information'] },
       gites: { type: 'array', items: { type: 'string', enum: ['soum', 'tech', 'suyen', 'estaing'] } },
       startDate: { type: ['string', 'null'] }, endDate: { type: ['string', 'null'] },
-      topic: { type: 'string', enum: ['contact', 'rules', 'wellness', 'description', 'general_prices', 'payment', 'cancellation', 'unknown'] },
-    }, required: ['intent', 'gites', 'startDate', 'endDate', 'topic'],
+      topic: { type: 'string', enum: ['contact', 'rules', 'wellness', 'description', 'general_prices', 'tourist_tax', 'payment', 'cancellation', 'unknown'], description: 'general_prices concerne uniquement les tarifs du logement. Une taxe de séjour relève de tourist_tax. Un équipement ou fait absent des informations officielles relève de unknown, sans choisir une rubrique voisine.' },
+      dateIssue: { type: 'string', enum: ['none', 'missing', 'ambiguous', 'invalid'], description: 'invalid pour une date calendaire impossible, par exemple le 29 février 2027. missing si une date ou une année manque, ambiguous si plusieurs interprétations restent possibles. none si les dates indiquées sont complètes et cohérentes.' },
+    }, required: ['intent', 'gites', 'startDate', 'endDate', 'topic', 'dateIssue'],
   },
 };
 
@@ -269,6 +270,7 @@ const INFORMATION_REPLIES: Record<string, string> = {
   general_prices: 'Pour les quatre gîtes : basse saison 150 € pour une nuit seule, 125 €/nuit dès deux nuits ; moyenne saison 165 € puis 140 €/nuit ; haute saison 180 € puis 150 €/nuit. Chaque nuit suit sa saison. Donnez vos dates avec l’année pour vérifier le tarif du séjour.',
   payment: 'Acompte de 20 % à la réservation, solde à l’arrivée. Espèces, carte bancaire et virement acceptés. Chèques-vacances non acceptés.',
   cancellation: 'Remboursement intégral jusqu’à 15 jours avant l’arrivée. Pour les autres cas, contactez le gérant au 06 45 79 59 39.',
+  tourist_tax: 'Le montant de la taxe de séjour doit être confirmé par le gérant au 06 45 79 59 39 / spanazol@wanadoo.fr.',
   unknown: 'Ce point doit être confirmé par le gérant au 06 45 79 59 39 / spanazol@wanadoo.fr.',
 };
 
@@ -295,6 +297,8 @@ async function createAgentReply(messages: WebChatMessage[], mode: 'draft' | 'web
   if (response.status !== 'completed' || calls.length !== 1 || calls[0].name !== 'resolve_visitor_request') throw new Error('Demande non interprétable');
   const args = JSON.parse(calls[0].arguments);
   if (args.intent === 'information') return INFORMATION_REPLIES[args.topic] || INFORMATION_REPLIES.unknown;
+  if (args.dateIssue === 'invalid') return 'La période contient des dates invalides. Précisez une arrivée et un départ valides avec l’année.';
+  if (args.dateIssue === 'ambiguous') return 'Précisez une seule période avec les dates d’arrivée et de départ et leur année pour vérifier les calendriers.';
   if (!['availability', 'price'].includes(args.intent) || !Array.isArray(args.gites) || args.gites.some((gite: unknown) => !['soum', 'tech', 'suyen', 'estaing'].includes(String(gite)))) throw new Error('Demande invalide');
   if (!args.startDate || !args.endDate) return 'Précisez ' + (!args.startDate && !args.endDate ? 'les dates d’arrivée et de départ' : !args.startDate ? 'la date d’arrivée' : 'la date de départ') + ' avec l’année pour vérifier les calendriers.';
   // Never trust an inferred year, even when the model violates extraction instructions.

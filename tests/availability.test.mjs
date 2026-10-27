@@ -132,3 +132,14 @@ test('booking UI and server agree on mixed seasons and DST nights',async()=>{
   assert.equal(context.ui.getSeason(new Date(2027,8,1)),null);assert.equal(context.ui.getSeasonLabel('mixte'),'Plusieurs saisons');
   assert.equal(context.ui.validateBooking(new Date(2027,7,31),new Date(2027,8,2)).valid,false);
 });
+
+test('invalid and ambiguous extracted dates cannot trigger an availability assertion',async()=>{
+ for(const dateIssue of ['invalid','ambiguous']){
+  const h=harness({plan:{...plan,dateIssue}});const reply=await h.api.createAgentReply([{role:'user',content:'Le Soum en 2027 ?'}],'web');
+  assert.doesNotMatch(reply,/aucune nuit occupée/);assert.equal(h.counts().reads,0);
+ }
+});
+test('tourist tax uses only an explicit confirmation request, never a lodging price',async()=>{
+ const h=harness({plan:{intent:'information',topic:'tourist_tax',gites:[],startDate:null,endDate:null,dateIssue:'none'}});
+ const reply=await h.api.createAgentReply([{role:'user',content:'Taxe de séjour ?'}],'web');assert.match(reply,/confirmé par le gérant/);assert.doesNotMatch(reply,/€/);assert.equal(h.counts().reads,0);
+});

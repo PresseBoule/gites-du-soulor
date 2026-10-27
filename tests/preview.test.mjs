@@ -12,3 +12,11 @@ test('diagnostic uses exactly the reviewed production availability functions, wi
  assert.match(preview,/mode:'read_only_preview'/);
 });
 
+
+test('conversational preview reuses the reviewed model and availability functions without booking mutations',async()=>{
+ const {code:production}=await transform(fs.readFileSync(new URL('supabase/functions/server/index.tsx',root),'utf8'),{loader:'ts',format:'esm'});
+ const preview=fs.readFileSync(new URL('supabase/functions/soulor-agent-preview/preview.js',root),'utf8');
+ for(const name of ['createAgentReply','createOpenAIResponse','getAgentInstructions','renderVerifiedQuote','executeAgentQuote','getAirbnbBookings','getSiteBookings'])assert.equal(extract(production,name),extract(preview,name));
+ assert.doesNotMatch(preview,/kv\.(set|del|mset)|resend\.com|\/bookings|admin\/agent/);
+ assert.match(preview,/read_only_agent_preview/);
+});
