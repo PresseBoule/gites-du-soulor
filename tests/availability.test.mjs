@@ -10,11 +10,11 @@ const raw = fs.readFileSync(new URL('index.tsx', base), 'utf8').replace(/^import
 const compiled = await transform(raw + '\n globalThis.api = {executeAgentQuote, createAgentReply, parseAirbnbCalendar, toParisDate, getSiteBookings, app};', {loader:'ts',format:'iife'});
 const empty = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR';
 const event = (start='20270110', end='20270115', extra='') => `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:${start}\r\nDTEND;VALUE=DATE:${end}\r\n${extra}\r\nEND:VEVENT\r\nEND:VCALENDAR`;
-function harness({records=[], env={}, ics=empty, fail=false, plan, modelOutput}={}) {
+function harness({records=[], env={}, ics=empty, fail=false, plan, modelOutput, publishedPricing=pricing.DEFAULT_PRICING}={}) {
   let reads=0,fetches=0; const routes=new Map();
   class Hono {use(){} get(p,f){routes.set('GET '+p,f)} post(p,f){routes.set('POST '+p,f)} put(){} delete(){} patch(){} }
   const context=vm.createContext({console,Intl,Date,Map,Set,URL,AbortSignal,...pricing,
-    Hono,cors:()=>()=>{},logger:()=>()=>{},kv:{},
+    Hono,cors:()=>()=>{},logger:()=>()=>{},kv:{},loadPublishedPricing:async()=>publishedPricing,
     readSiteCalendar:async(gite)=>{reads++;if(records instanceof Error) throw records;return typeof records==='function'?records(gite):records;},
     Deno:{env:{get:n=>({OPENAI_API_KEY:'mock',AIRBNB_ICAL_SOUM:'https://calendar.invalid/soum',AIRBNB_ICAL_TECH:'https://calendar.invalid/tech',AIRBNB_ICAL_SUYEN:'https://calendar.invalid/suyen',AIRBNB_ICAL_ESTAING:'https://calendar.invalid/estaing',...env})[n]},serve:()=>{}},
     fetch:async(url,options)=>{
@@ -142,4 +142,31 @@ test('invalid and ambiguous extracted dates cannot trigger an availability asser
 test('tourist tax uses only an explicit confirmation request, never a lodging price',async()=>{
  const h=harness({plan:{intent:'information',topic:'tourist_tax',gites:[],startDate:null,endDate:null,dateIssue:'none'}});
  const reply=await h.api.createAgentReply([{role:'user',content:'Taxe de séjour ?'}],'web');assert.match(reply,/confirmé par le gérant/);assert.doesNotMatch(reply,/€/);assert.equal(h.counts().reads,0);
+});
+
+test('published rates drive both dated quotes and the agent general-price answer',async()=>{
+  const config=structuredClone(pricing.DEFAULT_PRICING);config.prices.basse.nightly=130;config.prices.basse.weekly=910;
+  const h=harness({publishedPricing:config,plan:{intent:'information',topic:'general_prices',gites:[],dateIssue:'none'}});
+  assert.equal((await h.api.executeAgentQuote(stay)).total,650);
+  const reply=await h.api.createAgentReply([{role:'user',content:'Quels sont vos tarifs ?'}],'web');assert.match(reply,/130 €/);assert.doesNotMatch(reply,/125 €/);
+});
+test('unreadable published pricing never silently falls back to old rates',async()=>{
+  const h=harness({publishedPricing:null,plan:{intent:'information',topic:'general_prices',gites:[],dateIssue:'none'}});
+  const result=await h.api.executeAgentQuote(stay);assert.equal(result.available,true);assert.equal(result.priceStatus,'unconfigured');assert.equal(result.total,undefined);
+  assert.doesNotMatch(await h.api.createAgentReply([{role:'user',content:'Vos prix ?'}],'web'),/€/);
+});
+test('a price changed since the client preview is rejected before reservation writes',async()=>{
+  const h=harness();const route=h.routes.get('POST /make-server-497309b8/bookings');
+  const result=await route({req:{json:async()=>({...stay,customerName:'Local test',customerEmail:'fixture@example.test',expectedTotal:1})},json:(body,status=200)=>({body,status})});
+  assert.equal(result.status,409);assert.equal(result.body.pricingChanged,true);assert.equal(h.counts().reads,0);
+});
+test('published-pricing reader validates the real CMS document and fails closed on read errors',async()=>{
+  const text=fs.readFileSync(new URL('publishedPricing.ts',base),'utf8').replace(/^import .*?;\r?\n/gm,'').replace('export async function','async function');
+  const {code}=await transform(text+'\nglobalThis.load=loadPublishedPricing;',{loader:'ts',format:'iife'});
+  const content={tarifs:[['150€','165€','180€'],['130€','140€','150€'],['910€','980€','1050€']].map(prices=>({prices:prices.map(price=>({price}))}))};
+  for(const [data,error,expected] of [[null,null,125],[{value:{content}},null,130],[{value:{content:{tarifs:[]}}},null,null],[null,new Error('offline'),null]]){
+    const query={select(){return this;},eq(){return this;},maybeSingle:async()=>({data,error})};
+    const ctx=vm.createContext({console,...pricing,createClient:()=>({from:()=>query}),Deno:{env:{get:()=>undefined}}});vm.runInContext(code,ctx);
+    assert.equal((await ctx.load())?.prices?.basse?.nightly??null,expected);
+  }
 });

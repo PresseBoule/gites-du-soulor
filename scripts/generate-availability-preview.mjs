@@ -15,6 +15,7 @@ const output = `// Generated from the reviewed production helpers by scripts/gen
 // Diagnostic only: no reservation writes, no email, no model call, no production-function replacement.
 import { readSiteCalendar } from '../server/siteCalendar.ts';
 import { normalizeDate, calculateServerPrice } from '../server/stayPricing.mjs';
+import { loadPublishedPricing } from '../server/publishedPricing.ts';
 const GITES = { 'Le Soum':'soum', 'Le Tech':'tech', 'Le Suyen':'suyen', "L'Estaing":'estaing', soum:'soum',tech:'tech',suyen:'suyen',estaing:'estaing' };
 ${helpers.map(name=>extractFunction(code,name)).join('\n\n')}
 Deno.serve(async (request) => {

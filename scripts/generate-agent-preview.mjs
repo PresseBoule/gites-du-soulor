@@ -7,7 +7,8 @@ function constant(name){const match=new RegExp('(?:const|let|var) '+name+' =').e
 const names=['toParisDate','isBlockingBooking','parseIcalDate','parseAirbnbCalendar','getAirbnbBookings','getSiteBookings','rangesOverlap','executeAgentQuote','normalizeGiteName','getAgentInstructions','createOpenAIResponse','renderVerifiedQuote','createAgentReply'];
 const output=`// Isolated conversational test: no booking writes and no email sending.
 import { readSiteCalendar } from '../server/siteCalendar.ts';
-import { normalizeDate, calculateServerPrice } from '../server/stayPricing.mjs';
+import { normalizeDate, calculateServerPrice, describePrices } from '../server/stayPricing.mjs';
+import { loadPublishedPricing } from '../server/publishedPricing.ts';
 ${['GITES','REQUEST_TOOL','INFORMATION_REPLIES'].map(constant).join('\n')}
 ${names.map(fn).join('\n\n')}
 const limits = new Map();

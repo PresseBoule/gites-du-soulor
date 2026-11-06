@@ -31,6 +31,23 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [pricing, setPricing] = useState<any>(null);
+  const [pricingError, setPricingError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    async function refreshPricing() {
+      try {
+        const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-497309b8/pricing`, { cache: 'no-store', headers: { Authorization: `Bearer ${publicAnonKey}` }, signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error('Tarifs indisponibles');
+        setPricing(data.pricing); setPricingError('');
+      } catch { if (!controller.signal.aborted) { setPricing(null); setPricingError('Les tarifs ne peuvent pas être vérifiés actuellement. Contactez le gérant avant de réserver.'); } }
+    }
+    void refreshPricing();
+    const refresh = () => { if (document.visibilityState === 'visible') void refreshPricing(); };
+    document.addEventListener('visibilitychange', refresh);
+    return () => { controller.abort(); document.removeEventListener('visibilitychange', refresh); };
+  }, [projectId, publicAnonKey]);
 
   useEffect(() => {
     fetchBookings();
@@ -167,7 +184,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
   }) => {
     if (!selectedStart || !selectedEnd) return;
 
-    const validation = validateBooking(selectedStart, selectedEnd);
+    const validation = validateBooking(selectedStart, selectedEnd, pricing);
     if (!validation.valid) {
       toast.error(validation.error);
       return;
@@ -195,6 +212,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
             gite,
             startDate: formatDateForServer(selectedStart),
             endDate: formatDateForServer(selectedEnd),
+            expectedTotal: calculatePrice(selectedStart, selectedEnd, pricing).total,
             ...customerData,
           }),
         }
@@ -209,6 +227,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
         setSelectedEnd(null);
         await fetchBookings();
       } else {
+        if (data.pricingChanged) { setPricing(data.pricing); setIsModalOpen(false); }
         toast.error(data.error || 'Erreur lors de la réservation');
       }
     } catch (error) {
@@ -272,15 +291,16 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
 
   let priceInfo = null;
   if (selectedStart && selectedEnd) {
-    const validation = validateBooking(selectedStart, selectedEnd);
+    const validation = validateBooking(selectedStart, selectedEnd, pricing);
     if (validation.valid) {
-      const { total, breakdown, season } = calculatePrice(selectedStart, selectedEnd);
+      const { total, breakdown, season } = calculatePrice(selectedStart, selectedEnd, pricing);
       priceInfo = { total, breakdown, season };
     }
   }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {pricingError && <p role="alert" className="text-amber-200">{pricingError}</p>}
       {/* En-tête du calendrier avec style élégant */}
       <div className="relative bg-gradient-to-br from-[#3d4f5c] to-[#2d3e4d] rounded-xl shadow-2xl overflow-hidden">
         {/* Bordure dorée décorative */}
@@ -327,7 +347,7 @@ export function GiteBookingCalendar({ gite, projectId, publicAnonKey }: GiteBook
               const isBooked = isDateBooked(day);
               const isSelectedDate = isSelected(day);
               const isPastDate = isPast(day);
-              const season = getSeason(day);
+              const season = getSeason(day, pricing);
               const seasonColor = getSeasonColor(season);
               // Mode "choix du départ" : arrivée fixée, départ pas encore choisi
               const isSelectingDeparture = !!selectedStart && !selectedEnd;

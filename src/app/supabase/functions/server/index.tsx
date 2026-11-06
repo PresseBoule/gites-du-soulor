@@ -43,7 +43,8 @@ const GITES: Record<string, string> = {
   estaing: 'estaing',
 };
 
-import { normalizeDate, calculateServerPrice } from './stayPricing.mjs';
+import { normalizeDate, calculateServerPrice, describePrices } from './stayPricing.mjs';
+import { loadPublishedPricing } from './publishedPricing.ts';
 
 function toParisDate(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -186,9 +187,7 @@ Informations officielles des Gîtes du Soulor :
 - Animaux : ils ne sont pas admis dans les gîtes.
 - Arrivée à partir de 16 h. Départ avant 11 h.
 - Chaque nuit est facturée selon sa propre saison. Les séjours sont possibles dès une nuit. Un tarif dégressif s’applique à partir de deux nuits.
-- Tarifs basse saison : 150 € pour une seule nuit, 125 € par nuit dès deux nuits, 875 € la semaine.
-- Tarifs moyenne saison : 165 € pour une seule nuit, 140 € par nuit dès deux nuits, 980 € la semaine.
-- Tarifs haute saison : 180 € pour une seule nuit, 150 € par nuit dès deux nuits, 1 050 € la semaine.
+- Les tarifs courants proviennent uniquement du contenu publié et des outils serveur. Ne réutilise aucun montant trouvé dans l’historique.
 - Les périodes tarifaires ne sont pas encore configurées au-delà du calendrier connu. Pour un séjour dont le tarif n’est pas configuré, indique que le gérant doit encore le confirmer.
 - Paiement : acompte de 20 % à la réservation, puis solde à l’arrivée. Moyens acceptés : espèces, carte bancaire et virement bancaire. Les chèques-vacances ne sont pas acceptés.
 - Annulation : remboursement intégral jusqu’à 15 jours avant l’arrivée. Pour les autres cas, le gérant doit confirmer les conditions applicables.
@@ -224,7 +223,7 @@ async function createOpenAIResponse(apiKey: string, body: Record<string, unknown
   return data;
 }
 
-async function executeAgentQuote(args: any) {
+async function executeAgentQuote(args: any, publishedPricing: any = undefined) {
   const normalizedGite = normalizeGiteName(String(args?.gite || ''));
   const startDate = normalizeDate(args?.startDate);
   const endDate = normalizeDate(args?.endDate);
@@ -235,7 +234,7 @@ async function executeAgentQuote(args: any) {
   try {
     const [siteBookings, airbnbBookings] = await Promise.all([getSiteBookings(normalizedGite), getAirbnbBookings(normalizedGite)]);
     const available = ![...siteBookings, ...airbnbBookings].some((booking) => rangesOverlap(startDate, endDate, booking));
-    const quote = calculateServerPrice(startDate, endDate);
+    const quote = calculateServerPrice(startDate, endDate, publishedPricing === undefined ? await loadPublishedPricing() : publishedPricing);
     return {
       success: true, available, gite: normalizedGite, startDate, endDate,
       checkedAt: new Date().toISOString(), sources: ['site', Deno.env.get('AIRBNB_ICAL_' + normalizedGite.toUpperCase()) ? 'airbnb_ics' : 'site_only'],
@@ -267,7 +266,7 @@ const INFORMATION_REPLIES: Record<string, string> = {
   description: 'Le Soum, Le Tech, Le Suyen et L’Estaing accueillent chacun 3 personnes maximum. Linge, ménage de fin de séjour, chauffage, électricité, Wi-Fi, parking privé et accès à l’espace bien-être sont inclus.',
   rules: 'Les animaux ne sont pas admis. Les gîtes sont inadaptés aux enfants de moins de 10 ans. Arrivée à partir de 16 h, départ avant 11 h. Séjours dès une nuit.',
   wellness: 'L’accès au bain nordique et au sauna est inclus pour les locataires. Un créneau privatif d’une heure doit être réservé en ligne.',
-  general_prices: 'Pour les quatre gîtes : basse saison 150 € pour une nuit seule, 125 €/nuit dès deux nuits ; moyenne saison 165 € puis 140 €/nuit ; haute saison 180 € puis 150 €/nuit. Chaque nuit suit sa saison. Donnez vos dates avec l’année pour vérifier le tarif du séjour.',
+  general_prices: 'Les tarifs doivent être vérifiés dans le contenu publié.',
   payment: 'Acompte de 20 % à la réservation, solde à l’arrivée. Espèces, carte bancaire et virement acceptés. Chèques-vacances non acceptés.',
   cancellation: 'Remboursement intégral jusqu’à 15 jours avant l’arrivée. Pour les autres cas, contactez le gérant au 06 45 79 59 39.',
   tourist_tax: 'Le montant de la taxe de séjour doit être confirmé par le gérant au 06 45 79 59 39 / spanazol@wanadoo.fr.',
@@ -296,7 +295,7 @@ async function createAgentReply(messages: WebChatMessage[], mode: 'draft' | 'web
   const calls = (response.output || []).filter((item: any) => item.type === 'function_call');
   if (response.status !== 'completed' || calls.length !== 1 || calls[0].name !== 'resolve_visitor_request') throw new Error('Demande non interprétable');
   const args = JSON.parse(calls[0].arguments);
-  if (args.intent === 'information') return INFORMATION_REPLIES[args.topic] || INFORMATION_REPLIES.unknown;
+  if (args.intent === 'information') return args.topic === 'general_prices' ? describePrices(await loadPublishedPricing()) : INFORMATION_REPLIES[args.topic] || INFORMATION_REPLIES.unknown;
   if (args.dateIssue === 'invalid') return 'La période contient des dates invalides. Précisez une arrivée et un départ valides avec l’année.';
   if (args.dateIssue === 'ambiguous') return 'Précisez une seule période avec les dates d’arrivée et de départ et leur année pour vérifier les calendriers.';
   if (!['availability', 'price'].includes(args.intent) || !Array.isArray(args.gites) || args.gites.some((gite: unknown) => !['soum', 'tech', 'suyen', 'estaing'].includes(String(gite)))) throw new Error('Demande invalide');
@@ -307,7 +306,8 @@ async function createAgentReply(messages: WebChatMessage[], mode: 'draft' | 'web
     return 'Précisez les dates d’arrivée et de départ avec l’année pour vérifier les calendriers.';
   }
   const gites = args.gites.length ? [...new Set(args.gites)] : ['soum', 'tech', 'suyen', 'estaing'];
-  const results = await Promise.all(gites.map((gite) => executeAgentQuote({ gite, startDate: args.startDate, endDate: args.endDate })));
+  const publishedPricing = await loadPublishedPricing();
+  const results = await Promise.all(gites.map((gite) => executeAgentQuote({ gite, startDate: args.startDate, endDate: args.endDate }, publishedPricing)));
   return results.map(renderVerifiedQuote).join('\n\n');
 }
 
@@ -542,6 +542,11 @@ app.get('/make-server-497309b8/bookings/:gite', async (c) => {
 });
 
 // Vérifier une disponibilité et obtenir un tarif calculé par le serveur.
+app.get('/make-server-497309b8/pricing', async c => {
+  c.header('Cache-Control', 'no-store');
+  const pricing = await loadPublishedPricing();
+  return pricing ? c.json({ success: true, pricing }) : c.json({ success: false, error: 'Les tarifs ne peuvent pas être vérifiés actuellement.' }, 503);
+});
 // Cette route servira aussi à l'agent IA : il ne doit jamais inventer un prix.
 app.post('/make-server-497309b8/quote', async (c) => {
   try {
@@ -578,9 +583,12 @@ app.post('/make-server-497309b8/bookings', async (c) => {
       return c.json({ success: false, error: 'Adresse e-mail invalide' }, 400);
     }
 
-    const quote = calculateServerPrice(normalizedStart, normalizedEnd);
+    const quote = calculateServerPrice(normalizedStart, normalizedEnd, await loadPublishedPricing());
     if (!quote) {
       return c.json({ success: false, error: 'Les tarifs ne sont pas configurés pour ces dates' }, 422);
+    }
+    if (body.expectedTotal !== undefined && (!Number.isFinite(body.expectedTotal) || Math.abs(body.expectedTotal - quote.total) > 0.005)) {
+      return c.json({ success: false, error: 'Le tarif vient de changer. Vérifiez le nouveau montant avant de renvoyer votre demande.', pricingChanged: true, pricing: await loadPublishedPricing() }, 409);
     }
     
     // Vérifier les conflits de dates
