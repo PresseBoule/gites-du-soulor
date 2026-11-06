@@ -1,6 +1,7 @@
 // Isolated conversational test: no booking writes and no email sending.
 import { readSiteCalendar } from '../server/siteCalendar.ts';
-import { normalizeDate, calculateServerPrice } from '../server/stayPricing.mjs';
+import { normalizeDate, calculateServerPrice, describePrices } from '../server/stayPricing.mjs';
+import { loadPublishedPricing } from '../server/publishedPricing.ts';
 const GITES = {
   "Le Soum": "soum",
   "Le Tech": "tech",
@@ -35,7 +36,7 @@ const INFORMATION_REPLIES = {
   description: "Le Soum, Le Tech, Le Suyen et L\u2019Estaing accueillent chacun 3 personnes maximum. Linge, m\xE9nage de fin de s\xE9jour, chauffage, \xE9lectricit\xE9, Wi-Fi, parking priv\xE9 et acc\xE8s \xE0 l\u2019espace bien-\xEAtre sont inclus.",
   rules: "Les animaux ne sont pas admis. Les g\xEEtes sont inadapt\xE9s aux enfants de moins de 10 ans. Arriv\xE9e \xE0 partir de 16 h, d\xE9part avant 11 h. S\xE9jours d\xE8s une nuit.",
   wellness: "L\u2019acc\xE8s au bain nordique et au sauna est inclus pour les locataires. Un cr\xE9neau privatif d\u2019une heure doit \xEAtre r\xE9serv\xE9 en ligne.",
-  general_prices: "Pour les quatre g\xEEtes : basse saison 150 \u20AC pour une nuit seule, 125 \u20AC/nuit d\xE8s deux nuits ; moyenne saison 165 \u20AC puis 140 \u20AC/nuit ; haute saison 180 \u20AC puis 150 \u20AC/nuit. Chaque nuit suit sa saison. Donnez vos dates avec l\u2019ann\xE9e pour v\xE9rifier le tarif du s\xE9jour.",
+  general_prices: "Les tarifs doivent \xEAtre v\xE9rifi\xE9s dans le contenu publi\xE9.",
   payment: "Acompte de 20 % \xE0 la r\xE9servation, solde \xE0 l\u2019arriv\xE9e. Esp\xE8ces, carte bancaire et virement accept\xE9s. Ch\xE8ques-vacances non accept\xE9s.",
   cancellation: "Remboursement int\xE9gral jusqu\u2019\xE0 15 jours avant l\u2019arriv\xE9e. Pour les autres cas, contactez le g\xE9rant au 06 45 79 59 39.",
   tourist_tax: "Le montant de la taxe de s\xE9jour doit \xEAtre confirm\xE9 par le g\xE9rant au 06 45 79 59 39 / spanazol@wanadoo.fr.",
@@ -117,7 +118,7 @@ function rangesOverlap(startDate, endDate, booking) {
   return Boolean(bookingStart && bookingEnd && startDate < bookingEnd && endDate > bookingStart);
 }
 
-async function executeAgentQuote(args) {
+async function executeAgentQuote(args, publishedPricing = void 0) {
   const normalizedGite = normalizeGiteName(String(args?.gite || ""));
   const startDate = normalizeDate(args?.startDate);
   const endDate = normalizeDate(args?.endDate);
@@ -128,7 +129,7 @@ async function executeAgentQuote(args) {
   try {
     const [siteBookings, airbnbBookings] = await Promise.all([getSiteBookings(normalizedGite), getAirbnbBookings(normalizedGite)]);
     const available = ![...siteBookings, ...airbnbBookings].some((booking) => rangesOverlap(startDate, endDate, booking));
-    const quote = calculateServerPrice(startDate, endDate);
+    const quote = calculateServerPrice(startDate, endDate, publishedPricing === void 0 ? await loadPublishedPricing() : publishedPricing);
     return {
       success: true,
       available,
@@ -164,9 +165,7 @@ Informations officielles des G\xEEtes du Soulor :
 - Animaux : ils ne sont pas admis dans les g\xEEtes.
 - Arriv\xE9e \xE0 partir de 16 h. D\xE9part avant 11 h.
 - Chaque nuit est factur\xE9e selon sa propre saison. Les s\xE9jours sont possibles d\xE8s une nuit. Un tarif d\xE9gressif s\u2019applique \xE0 partir de deux nuits.
-- Tarifs basse saison : 150 \u20AC pour une seule nuit, 125 \u20AC par nuit d\xE8s deux nuits, 875 \u20AC la semaine.
-- Tarifs moyenne saison : 165 \u20AC pour une seule nuit, 140 \u20AC par nuit d\xE8s deux nuits, 980 \u20AC la semaine.
-- Tarifs haute saison : 180 \u20AC pour une seule nuit, 150 \u20AC par nuit d\xE8s deux nuits, 1 050 \u20AC la semaine.
+- Les tarifs courants proviennent uniquement du contenu publi\xE9 et des outils serveur. Ne r\xE9utilise aucun montant trouv\xE9 dans l\u2019historique.
 - Les p\xE9riodes tarifaires ne sont pas encore configur\xE9es au-del\xE0 du calendrier connu. Pour un s\xE9jour dont le tarif n\u2019est pas configur\xE9, indique que le g\xE9rant doit encore le confirmer.
 - Paiement : acompte de 20 % \xE0 la r\xE9servation, puis solde \xE0 l\u2019arriv\xE9e. Moyens accept\xE9s : esp\xE8ces, carte bancaire et virement bancaire. Les ch\xE8ques-vacances ne sont pas accept\xE9s.
 - Annulation : remboursement int\xE9gral jusqu\u2019\xE0 15 jours avant l\u2019arriv\xE9e. Pour les autres cas, le g\xE9rant doit confirmer les conditions applicables.
@@ -227,7 +226,7 @@ async function createAgentReply(messages, mode) {
   const calls = (response.output || []).filter((item) => item.type === "function_call");
   if (response.status !== "completed" || calls.length !== 1 || calls[0].name !== "resolve_visitor_request") throw new Error("Demande non interpr\xE9table");
   const args = JSON.parse(calls[0].arguments);
-  if (args.intent === "information") return INFORMATION_REPLIES[args.topic] || INFORMATION_REPLIES.unknown;
+  if (args.intent === "information") return args.topic === "general_prices" ? describePrices(await loadPublishedPricing()) : INFORMATION_REPLIES[args.topic] || INFORMATION_REPLIES.unknown;
   if (args.dateIssue === "invalid") return "La p\xE9riode contient des dates invalides. Pr\xE9cisez une arriv\xE9e et un d\xE9part valides avec l\u2019ann\xE9e.";
   if (args.dateIssue === "ambiguous") return "Pr\xE9cisez une seule p\xE9riode avec les dates d\u2019arriv\xE9e et de d\xE9part et leur ann\xE9e pour v\xE9rifier les calendriers.";
   if (!["availability", "price"].includes(args.intent) || !Array.isArray(args.gites) || args.gites.some((gite) => !["soum", "tech", "suyen", "estaing"].includes(String(gite)))) throw new Error("Demande invalide");
@@ -237,7 +236,8 @@ async function createAgentReply(messages, mode) {
     return "Pr\xE9cisez les dates d\u2019arriv\xE9e et de d\xE9part avec l\u2019ann\xE9e pour v\xE9rifier les calendriers.";
   }
   const gites = args.gites.length ? [...new Set(args.gites)] : ["soum", "tech", "suyen", "estaing"];
-  const results = await Promise.all(gites.map((gite) => executeAgentQuote({ gite, startDate: args.startDate, endDate: args.endDate })));
+  const publishedPricing = await loadPublishedPricing();
+  const results = await Promise.all(gites.map((gite) => executeAgentQuote({ gite, startDate: args.startDate, endDate: args.endDate }, publishedPricing)));
   return results.map(renderVerifiedQuote).join("\n\n");
 }
 const limits = new Map();

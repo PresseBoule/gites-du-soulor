@@ -7,14 +7,14 @@ export const SEASON_PERIODS: SeasonPeriod[] = PERIODS.map(([start, end, season])
 function dateKey(date: Date) {
   return Number.isNaN(date.getTime()) ? '' : date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
 }
-export function getSeason(date: Date): Season | null { return getSeasonForDate(dateKey(date)); }
-export function calculatePrice(startDate: Date, endDate: Date) {
-  const quote = calculateServerPrice(dateKey(startDate), dateKey(endDate));
+export function getSeason(date: Date, config?: any): Season | null { return getSeasonForDate(dateKey(date), config); }
+export function calculatePrice(startDate: Date, endDate: Date, config?: any) {
+  const quote = calculateServerPrice(dateKey(startDate), dateKey(endDate), config);
   if (!quote) throw new Error('Tarifs non configurés pour toutes les nuits du séjour');
   return quote;
 }
-export function validateBooking(startDate: Date, endDate: Date): {valid: boolean; error?: string} {
-  if (!calculateServerPrice(dateKey(startDate), dateKey(endDate))) return { valid: false, error: 'Dates invalides ou tarifs non configurés pour toutes les nuits (366 nuits maximum)' };
+export function validateBooking(startDate: Date, endDate: Date, config?: any): {valid: boolean; error?: string} {
+  if (!calculateServerPrice(dateKey(startDate), dateKey(endDate), config)) return { valid: false, error: 'Dates invalides ou tarifs non configurés pour toutes les nuits (366 nuits maximum)' };
   return { valid: true };
 }
 export function getSeasonColor(season: Season | null): string {

@@ -2,6 +2,7 @@
 // Diagnostic only: no reservation writes, no email, no model call, no production-function replacement.
 import { readSiteCalendar } from '../server/siteCalendar.ts';
 import { normalizeDate, calculateServerPrice } from '../server/stayPricing.mjs';
+import { loadPublishedPricing } from '../server/publishedPricing.ts';
 const GITES = { 'Le Soum':'soum', 'Le Tech':'tech', 'Le Suyen':'suyen', "L'Estaing":'estaing', soum:'soum',tech:'tech',suyen:'suyen',estaing:'estaing' };
 function toParisDate(value) {
   if (typeof value !== "string") return null;
@@ -79,7 +80,7 @@ function rangesOverlap(startDate, endDate, booking) {
   return Boolean(bookingStart && bookingEnd && startDate < bookingEnd && endDate > bookingStart);
 }
 
-async function executeAgentQuote(args) {
+async function executeAgentQuote(args, publishedPricing = void 0) {
   const normalizedGite = normalizeGiteName(String(args?.gite || ""));
   const startDate = normalizeDate(args?.startDate);
   const endDate = normalizeDate(args?.endDate);
@@ -90,7 +91,7 @@ async function executeAgentQuote(args) {
   try {
     const [siteBookings, airbnbBookings] = await Promise.all([getSiteBookings(normalizedGite), getAirbnbBookings(normalizedGite)]);
     const available = ![...siteBookings, ...airbnbBookings].some((booking) => rangesOverlap(startDate, endDate, booking));
-    const quote = calculateServerPrice(startDate, endDate);
+    const quote = calculateServerPrice(startDate, endDate, publishedPricing === void 0 ? await loadPublishedPricing() : publishedPricing);
     return {
       success: true,
       available,
