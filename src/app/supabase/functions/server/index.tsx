@@ -1,4 +1,5 @@
 import { readSiteCalendar } from './siteCalendar.ts';
+import { createReservation } from './reservationWriter.ts';
 import { Hono } from 'npm:hono';
 import { cors } from 'npm:hono/cors';
 import { logger } from 'npm:hono/logger';
@@ -610,7 +611,7 @@ app.post('/make-server-497309b8/bookings', async (c) => {
     }
     
     // Créer la réservation avec la clé normalisée
-    const bookingId = `booking:${normalizedGite}:${Date.now()}`;
+    const bookingId = `booking:${normalizedGite}:${crypto.randomUUID()}`;
     const bookingData = {
       id: bookingId,
       gite, // On garde le nom complet pour l'affichage
@@ -625,7 +626,9 @@ app.post('/make-server-497309b8/bookings', async (c) => {
       createdAt: new Date().toISOString(),
     };
     
-    await kv.set(bookingId, bookingData);
+    if (!await createReservation(bookingId, bookingData)) {
+      return c.json({success:false,error:'Ces dates viennent d’être réservées. Actualisez le calendrier.'},409);
+    }
     
     // Envoyer l'email de confirmation au gérant
     const emailResult = await sendBookingEmail(bookingData);
@@ -649,23 +652,8 @@ app.post('/make-server-497309b8/bookings', async (c) => {
   }
 });
 
-// Mettre à jour le statut d'une demande (réservé au futur tableau de gestion / agent)
-app.patch('/make-server-497309b8/admin/bookings/:id/status', async (c) => {
-  if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
-
-  const id = c.req.param('id');
-  const body = await c.req.json();
-  const allowedStatuses: BookingStatus[] = ['pending', 'accepted', 'rejected', 'cancelled'];
-  if (!allowedStatuses.includes(body.status)) {
-    return c.json({ success: false, error: 'Statut invalide' }, 400);
-  }
-
-  const booking = await kv.get(id);
-  if (!booking) return c.json({ success: false, error: 'Demande introuvable' }, 404);
-
-  await kv.set(id, { ...booking, status: body.status, updatedAt: new Date().toISOString() });
-  return c.json({ success: true });
-});
+// Booking mutations are centralized in the CMS session-protected management API.
+app.patch('/make-server-497309b8/admin/bookings/:id/status', c => c.json({success:false,error:'Utilisez Réservations depuis le cadenas du site.'},410));
 
 // Lire les données complètes uniquement depuis le futur outil de gestion sécurisé.
 app.get('/make-server-497309b8/admin/bookings', async (c) => {
@@ -833,19 +821,7 @@ app.get('/make-server-497309b8/calendar/:gite/:token', async (c) => {
   });
 });
 
-// Supprimer une réservation (accès administrateur uniquement)
-app.delete('/make-server-497309b8/bookings/:id', async (c) => {
-  try {
-    if (!hasAdminAccess(c)) return c.json({ success: false, error: 'Accès refusé' }, 401);
-    const id = c.req.param('id');
-    
-    await kv.del(id);
-    
-    return c.json({ success: true });
-  } catch (error) {
-    console.log('Error deleting booking:', error);
-    return c.json({ success: false, error: `Error deleting booking: ${error}` }, 500);
-  }
-});
+// No permanent deletion or generic key deletion through the legacy endpoint.
+app.delete('/make-server-497309b8/bookings/:id', c => c.json({success:false,error:'Utilisez la corbeille depuis le cadenas du site.'},410));
 
 Deno.serve(app.fetch);

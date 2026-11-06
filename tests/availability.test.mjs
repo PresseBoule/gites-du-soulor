@@ -13,7 +13,7 @@ const event = (start='20270110', end='20270115', extra='') => `BEGIN:VCALENDAR\r
 function harness({records=[], env={}, ics=empty, fail=false, plan, modelOutput, publishedPricing=pricing.DEFAULT_PRICING}={}) {
   let reads=0,fetches=0; const routes=new Map();
   class Hono {use(){} get(p,f){routes.set('GET '+p,f)} post(p,f){routes.set('POST '+p,f)} put(){} delete(){} patch(){} }
-  const context=vm.createContext({console,Intl,Date,Map,Set,URL,AbortSignal,...pricing,
+  const context=vm.createContext({console,Intl,Date,Map,Set,URL,AbortSignal,...pricing,crypto:globalThis.crypto,createReservation:async()=>false,
     Hono,cors:()=>()=>{},logger:()=>()=>{},kv:{},loadPublishedPricing:async()=>publishedPricing,
     readSiteCalendar:async(gite)=>{reads++;if(records instanceof Error) throw records;return typeof records==='function'?records(gite):records;},
     Deno:{env:{get:n=>({OPENAI_API_KEY:'mock',AIRBNB_ICAL_SOUM:'https://calendar.invalid/soum',AIRBNB_ICAL_TECH:'https://calendar.invalid/tech',AIRBNB_ICAL_SUYEN:'https://calendar.invalid/suyen',AIRBNB_ICAL_ESTAING:'https://calendar.invalid/estaing',...env})[n]},serve:()=>{}},
@@ -105,7 +105,7 @@ test('quote HTTP route uses the same validation and checked source',async()=>{
   const r=await route({req:{json:async()=>stay},json:(body,status)=>({body,status})});assert.equal(r.status,200);assert.equal(r.body.available,false);
 });
 test('deployed and source copies remain identical',()=>{
-  for(const name of ['index.tsx','stayPricing.mjs','siteCalendar.ts'])assert.equal(fs.readFileSync(new URL(name,base),'utf8'),fs.readFileSync(new URL('../supabase/functions/server/'+name,import.meta.url),'utf8'));
+  for(const name of ['index.tsx','stayPricing.mjs','siteCalendar.ts','reservationWriter.ts'])assert.equal(fs.readFileSync(new URL(name,base),'utf8'),fs.readFileSync(new URL('../supabase/functions/server/'+name,import.meta.url),'utf8'));
 });
 test('exact Supabase count rejects truncated results and query failures',async()=>{
   const adapter=fs.readFileSync(new URL('siteCalendar.ts',base),'utf8').replace(/^import .*?;\r?\n/gm,'').replace('export async function','async function');
@@ -169,4 +169,10 @@ test('published-pricing reader validates the real CMS document and fails closed 
     const ctx=vm.createContext({console,...pricing,createClient:()=>({from:()=>query}),Deno:{env:{get:()=>undefined}}});vm.runInContext(code,ctx);
     assert.equal((await ctx.load())?.prices?.basse?.nightly??null,expected);
   }
+});
+
+test('a conflict found by the atomic writer is rejected before any booking email is sent',async()=>{
+ const h=harness();const route=h.routes.get('POST /make-server-497309b8/bookings');
+ const result=await route({req:{json:async()=>({...stay,customerName:'Client fictif',customerEmail:'fixture@example.test'})},json:(body,status=200)=>({body,status})});
+ assert.equal(result.status,409);assert.match(result.body.error,/réservées/);
 });
